@@ -201,19 +201,58 @@ export function AlumniTable() {
         formData.append('file', importFile);
 
         try {
-            await axios.post('/alumni/import', formData, {
+            const response = await axios.post('/alumni/import', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
             });
+            const imported = Number(response.data?.imported ?? 0);
+            const skipped = Number(response.data?.skipped ?? 0);
+            const totalRows = Number(response.data?.total_rows ?? response.data?.totalRows ?? 0);
+            const errors = Array.isArray(response.data?.errors) ? response.data.errors : [];
+            const hasErrors = errors.length > 0;
 
-            toast.success('Alumni imported successfully ✅');
-            fetchAlumni();
-            setImportOpen(false);
-            setImportFile(null);
+            if (imported > 0) {
+                toast.success(`${imported} of ${totalRows} row(s) imported`);
+                fetchAlumni();
+                setImportOpen(false);
+                setImportFile(null);
+            } else if (!hasErrors) {
+                toast.warning('Import completed, no rows were processed');
+            }
+
+            if (hasErrors) {
+                const sample = errors
+                    .slice(0, 3)
+                    .map((item: { row: number; reason: string }) => `Row ${item.row}: ${item.reason}`)
+                    .join('\n');
+
+                const skippedMessage = skipped > 0 ? `${skipped} rows were skipped.` : 'Some rows were skipped.';
+                const warningMessage = sample ? `${skippedMessage} Example: ${sample}` : skippedMessage;
+
+                if (imported > 0) {
+                    toast.warning('Some rows were skipped', {
+                        description: warningMessage,
+                    });
+                } else {
+                    toast.error('Import completed with skipped rows', {
+                        description: warningMessage,
+                    });
+                }
+            }
         } catch (error: unknown) {
-            const errorMessage = axios.isAxiosError(error) ? error.response?.data?.message : 'Something went wrong.';
-            toast.error('Import failed ❌', {
-                description: errorMessage,
-            });
+            const errorMessage = axios.isAxiosError(error) ? error.response?.data?.message || error.response?.data?.error : 'Something went wrong.';
+            const validationErrors = axios.isAxiosError(error) ? error.response?.data?.errors : null;
+            if (validationErrors && typeof validationErrors === 'object') {
+                const validationMessage = Object.values(validationErrors)
+                    .flat()
+                    .join(' ');
+                toast.error('Import failed', {
+                    description: validationMessage || errorMessage,
+                });
+            } else {
+                toast.error('Import failed ❌', {
+                    description: errorMessage,
+                });
+            }
         } finally {
             setImportLoading(false);
         }
@@ -863,3 +902,4 @@ export function AlumniTable() {
         </div>
     );
 }
+

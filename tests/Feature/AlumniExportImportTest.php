@@ -4,7 +4,12 @@ namespace Tests\Feature;
 
 use App\Models\Alumni;
 use App\Models\Program;
+use App\Models\User;
+use App\Services\AlumniImportService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Tests\TestCase;
 
 class AlumniExportImportTest extends TestCase
@@ -66,17 +71,206 @@ class AlumniExportImportTest extends TestCase
      */
     public function test_alumni_import_with_valid_data()
     {
-        $file = $this->createValidAlumniFile();
+        $user = User::factory()->create();
+        $file = $this->createAlumniImportFile([
+            [
+                '2024001',
+                'alice@example.com',
+                'BS Information Technology',
+                'Dela Cruz',
+                'Alice',
+                'A',
+                'MAlE',
+                'San Nicolas, Lubao',
+                '09171234567',
+                '2024',
+                'Employed',
+                'Sample Company',
+                'No',
+                'Private',
+                'Manila',
+                'Private',
+                'YeS',
+                'Yes',
+                '5',
+            ],
+        ]);
 
-        $response = $this->post('/import-alumni', [
+        $response = $this->actingAs($user)->post('/alumni/import', [
             'file' => $file,
         ]);
 
         $response->assertStatus(200);
+        $response->assertJsonPath('imported', 1);
+        $response->assertJsonPath('skipped', 0);
+        $response->assertJsonPath('total_rows', 1);
         $this->assertDatabaseHas('alumni', [
             'student_number' => '2024001',
             'email' => 'alice@example.com',
+            'sex' => 'male',
+            'related_to_course' => 'yes',
         ]);
+    }
+
+    public function test_alumni_import_skips_invalid_values_and_returns_errors()
+    {
+        $user = User::factory()->create();
+        $file = $this->createAlumniImportFile([
+            [
+                '2024002',
+                'bob@example.com',
+                'BS Information Technology',
+                'Dela Cruz',
+                'Bob',
+                'A',
+                'Unknown',
+                'San Nicolas, Lubao',
+                '09171234568',
+                '2024',
+                'Employed',
+                'Sample Company',
+                'No',
+                'Private',
+                'Manila',
+                'Private',
+                'Maybe',
+                'Maybe',
+                '5',
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->post('/alumni/import', [
+            'file' => $file,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('imported', 0);
+        $response->assertJsonPath('skipped', 1);
+        $response->assertJsonPath('total_rows', 1);
+        $this->assertEquals(1, count($response->json('errors')));
+        $response->assertJsonPath('errors.0.row', 4);
+        $response->assertStringContainsString('Sex', $response->json('errors.0.reason'));
+        $this->assertDatabaseMissing('alumni', ['student_number' => '2024002']);
+    }
+
+    public function test_alumni_import_supports_partial_success()
+    {
+        $user = User::factory()->create();
+        $file = $this->createAlumniImportFile([
+            [
+                '2024003',
+                'charlie@example.com',
+                'BS Information Technology',
+                'Dela Cruz',
+                'Charlie',
+                'A',
+                'Female',
+                'San Nicolas, Lubao',
+                '09171234569',
+                '2024',
+                'Employed',
+                'Sample Company',
+                'No',
+                'Private',
+                'Manila',
+                'Private',
+                'Yes',
+                'Yes',
+                '5',
+            ],
+            [
+                '2024004',
+                '',
+                'BS Information Technology',
+                'Dela Cruz',
+                'Missing Email',
+                'A',
+                'Male',
+                'San Nicolas, Lubao',
+                '09171234570',
+                '2024',
+                'Employed',
+                'Sample Company',
+                'No',
+                'Private',
+                'Manila',
+                'Private',
+                'Yes',
+                'Yes',
+                '5',
+            ],
+            [
+                '2024005',
+                'david@example.com',
+                'BS Information Technology',
+                'Dela Cruz',
+                'David',
+                'A',
+                'Male',
+                'San Nicolas, Lubao',
+                '09171234571',
+                '2024',
+                'Employed',
+                'Sample Company',
+                'No',
+                'Private',
+                'Manila',
+                'Private',
+                'Maybe',
+                'Yes',
+                '5',
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->post('/alumni/import', [
+            'file' => $file,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('imported', 1);
+        $response->assertJsonPath('skipped', 2);
+        $response->assertJsonPath('total_rows', 3);
+        $this->assertDatabaseHas('alumni', ['student_number' => '2024003']);
+        $this->assertDatabaseMissing('alumni', ['student_number' => '2024004']);
+        $this->assertDatabaseMissing('alumni', ['student_number' => '2024005']);
+    }
+
+    public function test_alumni_import_with_missing_required_columns_is_skipped()
+    {
+        $user = User::factory()->create();
+        $file = $this->createAlumniImportFile([
+            [
+                '',
+                'eve@example.com',
+                'BS Information Technology',
+                '',
+                '',
+                'A',
+                'Female',
+                'San Nicolas, Lubao',
+                '09171234572',
+                '2024',
+                'Employed',
+                'Sample Company',
+                'No',
+                'Private',
+                'Manila',
+                'Private',
+                'Yes',
+                'Yes',
+                '5',
+            ],
+        ]);
+
+        $response = $this->actingAs($user)->post('/alumni/import', [
+            'file' => $file,
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonPath('imported', 0);
+        $response->assertJsonPath('total_rows', 1);
+        $this->assertEquals(1, count($response->json('errors')));
+        $response->assertStringContainsString('Student Number is required.', $response->json('errors.0.reason'));
     }
 
     /**
@@ -84,7 +278,8 @@ class AlumniExportImportTest extends TestCase
      */
     public function test_alumni_import_requires_file()
     {
-        $response = $this->postJson('/import-alumni', []);
+        $user = User::factory()->create();
+        $response = $this->actingAs($user)->postJson('/alumni/import', []);
 
         $response->assertStatus(422);
         $response->assertJsonValidationErrors('file');
@@ -95,9 +290,10 @@ class AlumniExportImportTest extends TestCase
      */
     public function test_alumni_import_rejects_invalid_file_type()
     {
+        $user = User::factory()->create();
         $file = \Illuminate\Http\UploadedFile::fake()->create('alumni.pdf');
 
-        $response = $this->postJson('/import-alumni', [
+        $response = $this->actingAs($user)->postJson('/alumni/import', [
             'file' => $file,
         ]);
 
@@ -304,8 +500,53 @@ class AlumniExportImportTest extends TestCase
      */
     protected function createValidAlumniFile()
     {
-        // For testing purposes, return a mock file
-        // In production, you'd create a real Excel file
-        return \Illuminate\Http\UploadedFile::fake()->create('alumni.xlsx');
+        return $this->createAlumniImportFile([[
+            '2024001',
+            'alice@example.com',
+            'BS Information Technology',
+            'Dela Cruz',
+            'Alice',
+            'A',
+            'Male',
+            'San Nicolas, Lubao',
+            '09171234567',
+            '2024',
+            'Employed',
+            'Sample Company',
+            'No',
+            'Private',
+            'Manila',
+            'Private',
+            'Yes',
+            'Yes',
+            '5',
+        ]]);
+    }
+
+    protected function createAlumniImportFile(array $rows, bool $includeMetadataRows = true): UploadedFile
+    {
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+
+        $rowNumber = 1;
+        if ($includeMetadataRows) {
+            $sheet->setCellValue("A{$rowNumber}", 'Pampanga State University');
+            $rowNumber++;
+            $sheet->setCellValue("A{$rowNumber}", 'Lubao, Campus');
+            $rowNumber++;
+        }
+
+        $sheet->fromArray([AlumniImportService::getHeaders()], null, "A{$rowNumber}");
+        $rowNumber++;
+
+        if (!empty($rows)) {
+            $sheet->fromArray($rows, null, "A{$rowNumber}");
+        }
+
+        $tempPath = tempnam(sys_get_temp_dir(), 'alumni_import_') . '.xlsx';
+        (new Xlsx($spreadsheet))->save($tempPath);
+
+        return new UploadedFile($tempPath, 'alumni_import.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', null, true);
     }
 }
+

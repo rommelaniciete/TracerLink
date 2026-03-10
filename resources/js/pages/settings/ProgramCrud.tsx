@@ -14,6 +14,8 @@ import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { type BreadcrumbItem } from '@/types';
 import { Edit, Loader2, Plus, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+
 
 type Program = {
     id: number;
@@ -40,7 +42,6 @@ export default function ProgramCrud({ programs }: Props) {
     const {
         data,
         setData,
-        delete: destroy,
         post,
         put,
         reset,
@@ -72,6 +73,11 @@ export default function ProgramCrud({ programs }: Props) {
                     setShowModal(false);
                     reset();
                     setEditingProgram(null);
+                    toast.success('Program updated successfully.');
+                },
+                onError: (formErrors) => {
+                    setShowModal(true);
+                    toast.error(formErrors.name ?? 'Failed to update program.');
                 },
             });
         } else {
@@ -79,20 +85,38 @@ export default function ProgramCrud({ programs }: Props) {
                 onSuccess: () => {
                     setShowModal(false);
                     reset();
+                    toast.success('Program added successfully.');
+                },
+                onError: (formErrors) => {
+                    setShowModal(true);
+                    toast.error(formErrors.name ?? 'Failed to add program.');
                 },
             });
         }
     };
 
-    const handleDeleteProgram = async (id: number) => {
+    const handleDeleteProgram = (id: number) => {
         setProcessingDelete(id);
-        try {
-            await router.delete(`/program/${id}`);
-        } catch (error) {
-            console.error('Error deleting program:', error);
-        } finally {
-            setProcessingDelete(null);
-        }
+
+        router.delete(`/program/${id}`, {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                const flash = (page.props as { flash?: { success?: string; error?: string } }).flash;
+
+                if (flash?.error) {
+                    toast.error(flash.error);
+                    return;
+                }
+
+                toast.success(flash?.success ?? 'Program deleted successfully.');
+            },
+            onError: () => {
+                toast.error('Failed to delete program.');
+            },
+            onFinish: () => {
+                setProcessingDelete(null);
+            },
+        });
     };
 
     const isProcessing = (programId: number) => processingDelete === programId;
@@ -237,7 +261,7 @@ Note: You cannot delete a program if it has assigned alumni or records.`}
                                                 required
                                                 disabled={processing}
                                             />
-                                            <InputError className="mt-2" message={errors.name} />
+                                            <InputError  message={errors.name} />
                                         </div>
 
                                         <DialogFooter className="gap-2">

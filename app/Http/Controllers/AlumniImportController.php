@@ -29,7 +29,7 @@ class AlumniImportController extends Controller
             return response()->json($result);
         } catch (\Exception $e) {
             return response()->json([
-                'error' => 'Import failed: ' . $e->getMessage()
+                'error' => 'Import failed: ' . $e->getMessage(),
             ], 500);
         }
     }
