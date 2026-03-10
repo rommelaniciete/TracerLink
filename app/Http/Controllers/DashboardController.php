@@ -21,23 +21,23 @@ class DashboardController extends Controller
             ->selectRaw('
                 graduation_year as year,
                 COUNT(*) as total,
-                SUM(CASE WHEN employment_status = "employed" THEN 1 ELSE 0 END) as employed,
-                SUM(CASE WHEN employment_status = "unemployed" THEN 1 ELSE 0 END) as unemployed
+                SUM(CASE WHEN employment_status = \'employed\' THEN 1 ELSE 0 END) as employed,
+                SUM(CASE WHEN employment_status = \'unemployed\' THEN 1 ELSE 0 END) as unemployed
             ')
             ->whereNotNull('graduation_year')
             ->groupBy('graduation_year')
-            ->orderByRaw('CAST(graduation_year AS UNSIGNED) ASC')
+            ->orderByRaw('CAST(graduation_year AS INTEGER) ASC')
             ->get()
             ->keyBy('year');
 
         // ✅ Find graduation year range
         $minYear = DB::table('alumni')
             ->whereNotNull('graduation_year')
-            ->min(DB::raw('CAST(graduation_year AS UNSIGNED)'));
+            ->min(DB::raw('CAST(graduation_year AS INTEGER)'));
 
         $maxYear = DB::table('alumni')
             ->whereNotNull('graduation_year')
-            ->max(DB::raw('CAST(graduation_year AS UNSIGNED)'));
+            ->max(DB::raw('CAST(graduation_year AS INTEGER)'));
 
         // ✅ Prepare chart data for employment chart
         $alumniPerYear = [];

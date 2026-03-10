@@ -29,6 +29,7 @@ use App\Http\Controllers\{
 use App\Exports\StudentTemplateExport;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Events\TestEvent;
+use Illuminate\Support\Facades\Mail;
 
 // 🌐 Public Welcome Page
 // Route::get('/', fn () => Inertia::render('welcome'))->name('home');
@@ -184,7 +185,7 @@ Route::get('/api/programs', function() {
 });
 
 Route::get('/programs', function () {
-    return Program::select('id', 'name')->orderBy('name')->get();
+    return \App\Models\Program::select('id', 'name')->orderBy('name')->get();
 });
 
 Route::get('/alumni/template/download', [AlumniController::class, 'downloadTemplate'])
@@ -195,6 +196,8 @@ Route::get('/alumni/template/download', [AlumniController::class, 'downloadTempl
 Route::get('/students/download-template', function () {
     return Excel::download(new StudentTemplateExport, 'student_template.xlsx');
 })->name('students.download-template');
+
+
 // 🧩 Include extra route files
 require __DIR__ . '/settings.php';
 require __DIR__ . '/auth.php';

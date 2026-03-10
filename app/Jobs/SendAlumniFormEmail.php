@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Mail\AlumniFormMail;
 use Illuminate\Bus\Queueable;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -12,8 +13,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 
 class SendAlumniFormEmail implements ShouldQueue
 {
-    use InteractsWithQueue, Queueable, SerializesModels;
-     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
+    use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     protected $student;
 
@@ -24,6 +24,11 @@ class SendAlumniFormEmail implements ShouldQueue
 
     public function handle()
     {
-        Mail::to($this->student->email)->send(new AlumniFormMail($this->student));
+        try {
+            Mail::to($this->student->email)->send(new AlumniFormMail($this->student));
+        } catch (\Exception $e) {
+            Log::error('SendAlumniFormEmail failed: ' . $e->getMessage());
+            throw $e; // Re-throw to fail the job properly
+        }
     }
 }
