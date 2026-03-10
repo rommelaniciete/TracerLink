@@ -78,60 +78,60 @@ class StudentController extends Controller
      * Import students from Excel.
      */
     public function import(Request $request)
-{
-    $request->validate([
-        'file' => 'required|file',
-    ]);
-
-    $file = $request->file('file');
-    $spreadsheet = IOFactory::load($file->getPathname());
-    $sheet = $spreadsheet->getActiveSheet();
-    $rows = $sheet->toArray();
-
-    // Skip header row
-    array_shift($rows);
-    
-    $inserted = 0;
-
-    foreach ($rows as $row) {
-        $student_number = trim($row[0] ?? '');
-        $student_name   = trim($row[1] ?? '');
-        $email          = trim($row[2] ?? '');
-        $year           = trim($row[3] ?? ''); // Year should be in column D (index 3)
-
-        // Skip invalid rows
-        if (empty($student_number) || empty($student_name) || empty($year) || !is_numeric($year)) {
-            continue;
-        }
-
-        $year = (int)$year;
-        $currentYear = (int)date('Y');
-        
-        // Validate year range
-        if ($year < 2022 || $year > $currentYear) {
-            continue; // Skip invalid years
-        }
-
-        // Skip if student number already exists
-        if (Student::where('student_number', $student_number)->exists()) {
-            continue;
-        }
-
-        Student::create([
-            'student_number' => $student_number,
-            'student_name'   => $student_name,
-            'email'          => !empty($email) ? $email : null,
-            'year'           => $year,
+    {
+        $request->validate([
+            'file' => 'required|file',
         ]);
 
-        $inserted++;
+        $file = $request->file('file');
+        $spreadsheet = IOFactory::load($file->getPathname());
+        $sheet = $spreadsheet->getActiveSheet();
+        $rows = $sheet->toArray();
+
+        // Skip header row
+        array_shift($rows);
+
+        $inserted = 0;
+
+        foreach ($rows as $row) {
+            $student_number = trim($row[0] ?? '');
+            $student_name   = trim($row[1] ?? '');
+            $email          = trim($row[2] ?? '');
+            $year           = trim($row[3] ?? ''); // Year should be in column D (index 3)
+
+            // Skip invalid rows
+            if (empty($student_number) || empty($student_name) || empty($year) || !is_numeric($year)) {
+                continue;
+            }
+
+            $year = (int)$year;
+            $currentYear = (int)date('Y');
+
+            // Validate year range
+            if ($year < 2022 || $year > $currentYear) {
+                continue; // Skip invalid years
+            }
+
+            // Skip if student number already exists
+            if (Student::where('student_number', $student_number)->exists()) {
+                continue;
+            }
+
+            Student::create([
+                'student_number' => $student_number,
+                'student_name'   => $student_name,
+                'email'          => !empty($email) ? $email : null,
+                'year'           => $year,
+            ]);
+
+            $inserted++;
+        }
+
+        return redirect()->route('students.index')
+            ->with('success', "{$inserted} students imported successfully!");
     }
 
-    return redirect()->route('students.index')
-        ->with('success', "{$inserted} students imported successfully!");
-}
 
- 
 
     // Bulk delete students
     public function bulkDelete(Request $request)

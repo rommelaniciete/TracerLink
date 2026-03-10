@@ -1,97 +1,64 @@
-import { Head } from "@inertiajs/react"
-import AppLayout from "@/layouts/app-layout"
-import { SectionCards } from "@/components/card"
-import { AlumniBarChart } from "@/components/alumni-bar-chart"
-import AlumniRatingBarChart from "@/components/dashboard/AlumniRatingBarChart"
-import { type BreadcrumbItem } from "@/types"
-import { GraduatesLineChart } from "@/components/OverviewGrar"
-import GenderChart from "@/components/GenderChart"
+import { Head } from '@inertiajs/react';
+import { AlumniBarChart } from '@/components/alumni-bar-chart';
+import { SectionCards } from '@/components/card';
+import AlumniRatingBarChart from '@/components/dashboard/AlumniRatingBarChart';
+import GenderChart from '@/components/GenderChart';
+import { GraduatesLineChart } from '@/components/OverviewGrar';
+import AppLayout from '@/layouts/app-layout';
+import { type BreadcrumbItem } from '@/types';
 
 type Program = {
-  id: number
-  name: string
-  alumni_count: number
-}
+  id: number;
+  name: string;
+  alumni_count: number;
+};
 
 type AlumniPerYear = {
-  year: string
-  employed: number
-  unemployed: number
-  notTracked: number
-  total: number
-}
+  year: string;
+  employed: number;
+  unemployed: number;
+  notTracked: number;
+  total: number;
+};
 
 type RatingCount = {
-  star: number
-  total: number
-}
+  star: number;
+  total: number;
+};
 
 type DashboardProps = {
-  programs: Program[]
-  alumniPerYear: AlumniPerYear[]
-  ratingCounts: RatingCount[]
-}
+  programs: Program[];
+  alumniPerYear: AlumniPerYear[];
+  ratingCounts: RatingCount[];
+};
 
 const breadcrumbs: BreadcrumbItem[] = [
   {
-    title: "Dashboard",
-    href: "/dashboard",
+    title: 'Dashboard',
+    href: '/dashboard',
   },
-]
+];
 
-export default function dashboard({
-  programs,
-  alumniPerYear,
-  ratingCounts,
-}: DashboardProps) {
+export default function dashboard({ programs, alumniPerYear, ratingCounts }: DashboardProps) {
   return (
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Dashboard" />
 
       <div className="px-5">
-        {/* Page Header */}
-        <div className="flex flex-col gap-1">
-        </div>
+        <SectionCards programs={programs} />
 
-        {/* 🎓 Program Summary */}
-        <div className="">
-          <SectionCards programs={programs} />
-        </div>
-
-        {/* Grid Layout for Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Graduates Line Chart */}
-          <div className="gap-7">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <div className="space-y-7 mb-5">
             <GraduatesLineChart />
-            <div className="mt-13">
-               <AlumniRatingBarChart ratingCounts={ratingCounts} />
-            </div>
-            
+            <AlumniRatingBarChart ratingCounts={ratingCounts} />
           </div>
 
-          {/* Gender Distribution Chart */}
-          <div>
+          <div className="space-y-1 mb-5">
             <GenderChart />
-            <div className="mt-7">
-              <AlumniBarChart alumniPerYear={alumniPerYear} />
-            </div>
-             
-                
+            <AlumniBarChart alumniPerYear={alumniPerYear} />
           </div>
-
-          {/* Alumni Employment Chart */}
-          <div>
-            <div className="">
-            </div>
-         
-          </div>
-
-       
-           
-          {/* yehey */}
-          
         </div>
       </div>
     </AppLayout>
-  )
+  );
 }

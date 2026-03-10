@@ -14,15 +14,16 @@ class DashboardController extends Controller
     public function index()
     {
         // ✅ Get all programs with alumni count
-        $programs = Program::withCount('alumni')->get();
+        $programs = Program::withCount('alumni')->orderBy('id')->get();
 
         // ✅ Get alumni data grouped by graduation_year
         $rawData = DB::table('alumni')
             ->selectRaw('
                 graduation_year as year,
                 COUNT(*) as total,
-                SUM(CASE WHEN employment_status = \'employed\' THEN 1 ELSE 0 END) as employed,
-                SUM(CASE WHEN employment_status = \'unemployed\' THEN 1 ELSE 0 END) as unemployed
+                SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, \'\'))) = \'employed\' THEN 1 ELSE 0 END) as employed,
+                SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, \'\'))) = \'unemployed\' THEN 1 ELSE 0 END) as unemployed,
+                SUM(CASE WHEN LOWER(TRIM(COALESCE(employment_status, \'\'))) NOT IN (\'employed\', \'unemployed\') THEN 1 ELSE 0 END) as not_tracked
             ')
             ->whereNotNull('graduation_year')
             ->groupBy('graduation_year')
@@ -51,6 +52,7 @@ class DashboardController extends Controller
                     'total' => $data->total ?? 0,
                     'employed' => $data->employed ?? 0,
                     'unemployed' => $data->unemployed ?? 0,
+                    'notTracked' => $data->not_tracked ?? 0,
                 ];
             }
         }

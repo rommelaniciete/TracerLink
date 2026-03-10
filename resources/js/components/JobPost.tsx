@@ -73,7 +73,7 @@ export default function JobPost() {
         show_active: filters.show_active || false,
         show_upcoming: filters.show_upcoming || false,
     });
-    
+
     // Confirmation modals state
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [deleteId, setDeleteId] = useState<number | null>(null);
@@ -81,38 +81,38 @@ export default function JobPost() {
     const [showEmailModal, setShowEmailModal] = useState(false);
     const [emailJobId, setEmailJobId] = useState<number | null>(null);
     const [showAllEmployedModal, setShowAllEmployedModal] = useState(false);
-    
+
     // Loading states
     const [isDeleting, setIsDeleting] = useState(false);
     const [isBulkDeleting, setIsBulkDeleting] = useState(false);
     const [isSendingEmail, setIsSendingEmail] = useState(false);
     const [isSendingToAllEmployed, setIsSendingToAllEmployed] = useState(false);
     const [isApplyingFilters, setIsApplyingFilters] = useState(false);
-    
+
     // Location input state - simplified approach
     const [locationInputType, setLocationInputType] = useState<'text' | 'link'>('text');
-    
+
     // Pagination state
     const [currentPage, setCurrentPage] = useState(1);
     const itemsPerPage = 10;
-    
+
     // Calculate pagination data
     const totalPages = Math.ceil(jobs.length / itemsPerPage);
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const currentJobs = jobs.slice(startIndex, endIndex);
-    
+
     // Pagination controls
     const goToPage = (page: number) => {
         setCurrentPage(page);
     };
-    
+
     const goToNextPage = () => {
         if (currentPage < totalPages) {
             setCurrentPage(currentPage + 1);
         }
     };
-    
+
     const goToPrevPage = () => {
         if (currentPage > 1) {
             setCurrentPage(currentPage - 1);
@@ -131,14 +131,14 @@ export default function JobPost() {
             toast.error('No jobs selected');
             return;
         }
-        
+
         setIsBulkDeleting(true);
-        
+
         // Create promises for all delete operations
-        const deletePromises = selectedJobs.map(id => 
+        const deletePromises = selectedJobs.map(id =>
             destroy(route('job-posts.destroy', { job_post: id }))
         );
-        
+
         // Wait for all delete operations to complete
         Promise.all(deletePromises)
             .then(() => {
@@ -252,14 +252,14 @@ export default function JobPost() {
             application_deadline: job.application_deadline || '',
             start_date: job.start_date || '',
         });
-        
+
         // Set the appropriate input type based on existing data
         if (job.location_link) {
             setLocationInputType('link');
         } else {
             setLocationInputType('text');
         }
-        
+
         setEditId(job.id);
         setOpen(true);
     };
@@ -273,18 +273,18 @@ export default function JobPost() {
     // Handle form submit
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        
+
         // Validate date range
         if (data.application_deadline && data.posted_date && new Date(data.application_deadline) < new Date(data.posted_date)) {
             toast.error('Application deadline must be after posted date');
             return;
         }
-        
+
         if (data.start_date && data.posted_date && new Date(data.start_date) < new Date(data.posted_date)) {
             toast.error('Start date must be after posted date');
             return;
         }
-        
+
         if (editId) {
             put(route('job-posts.update', { job_post: editId }), {
                 onSuccess: () => {
@@ -307,7 +307,7 @@ export default function JobPost() {
     // Handle delete
     const handleDelete = () => {
         if (!deleteId) return;
-        
+
         setIsDeleting(true);
         destroy(route('job-posts.destroy', { job_post: deleteId }), {
             onSuccess: () => {
@@ -373,31 +373,31 @@ export default function JobPost() {
     const isJobActive = (job: Job) => {
         const now = new Date();
         const applicationDeadline = job.application_deadline ? parseDateString(job.application_deadline) : null;
-        
+
         // If no deadline set, use status field
         if (!applicationDeadline) {
             return job.status === 'active';
         }
-        
+
         // Check if current date is before deadline and status is active
         const isBeforeDeadline = now <= applicationDeadline;
-        
+
         return isBeforeDeadline && job.status === 'active';
     };
 
     // Parse date string from backend
     const parseDateString = (dateString: string): Date | null => {
         if (!dateString) return null;
-        
+
         try {
             if (dateString.includes('T')) {
                 return parseISO(dateString);
             }
-            
+
             if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
                 return new Date(dateString + 'T00:00:00');
             }
-            
+
             return new Date(dateString);
         } catch (e) {
             console.error('Error parsing date:', e, dateString);
@@ -408,30 +408,30 @@ export default function JobPost() {
     // Format date for display
     const formatDate = (dateString: string): string => {
         if (!dateString) return 'Not set';
-        
+
         const date = parseDateString(dateString);
         if (!date || !isValid(date)) return 'Invalid date';
-        
+
         return format(date, 'MMM dd, yyyy');
     };
 
     // Check if a job is expired based on application deadline
     const isJobExpired = (job: Job) => {
         if (!job.application_deadline) return false;
-        
+
         const deadline = parseDateString(job.application_deadline);
         if (!deadline || !isValid(deadline)) return false;
-        
+
         return new Date() > deadline;
     };
 
     // Check if job is upcoming based on start date
     const isJobUpcoming = (job: Job) => {
         if (!job.start_date) return false;
-        
+
         const startDate = parseDateString(job.start_date);
         if (!startDate || !isValid(startDate)) return false;
-        
+
         return new Date() < startDate;
     };
 
@@ -445,7 +445,7 @@ export default function JobPost() {
                 if (match) {
                     return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
                 }
-                
+
                 // Try query parameters
                 const queryCoords = url.searchParams.get('q');
                 if (queryCoords) {
@@ -469,37 +469,27 @@ export default function JobPost() {
                     <h1 className="text-2xl font-bold tracking-tight">Job Post Management</h1>
                     <p className="text-muted-foreground">Create and manage job postings for alumni</p>
                 </div>
-                
+
                 <div className="flex flex-col sm:flex-row gap-2">
                     <Button size="sm" onClick={openAdd} className="sm:w-auto  border-2 border-dashed border-primary bg-transparent text-primary hover:bg-primary/20">
-                       <PlusIcon className="mr-2 h-4 w-4 " /> Add Job Post
+                        <PlusIcon className="mr-2 h-4 w-4 " /> Add Job Post
                     </Button>
-                    {/* <Button variant="secondary" onClick={() => setShowAllEmployedModal(true)} className="sm:w-auto">
-                        <Send className="mr-2 h-4 w-4" />
-                        Send to All Employed
-                    </Button> */}
+
                     <Popover open={dateFilterOpen} onOpenChange={setDateFilterOpen}>
                         <PopoverTrigger asChild>
-                            {/* <Button variant="outline" className="sm:w-auto" disabled={isApplyingFilters}>
-                                {isApplyingFilters ? (
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                ) : (
-                                    <Filter className="mr-2 h-4 w-4" />
-                                )}
-                                Filter
-                            </Button> */}
+
                         </PopoverTrigger>
                         <PopoverContent className="w-80">
                             <div className="space-y-4">
                                 <h4 className="font-medium">Filter Jobs</h4>
-                                
+
                                 <div className="grid grid-cols-2 gap-2">
                                     <div className="space-y-2">
                                         <Label className="text-xs">Start Date</Label>
                                         <Input
                                             type="date"
                                             value={dateFilter.start_date}
-                                            onChange={(e) => setDateFilter({...dateFilter, start_date: e.target.value})}
+                                            onChange={(e) => setDateFilter({ ...dateFilter, start_date: e.target.value })}
                                         />
                                     </div>
                                     <div className="space-y-2">
@@ -507,16 +497,16 @@ export default function JobPost() {
                                         <Input
                                             type="date"
                                             value={dateFilter.end_date}
-                                            onChange={(e) => setDateFilter({...dateFilter, end_date: e.target.value})}
+                                            onChange={(e) => setDateFilter({ ...dateFilter, end_date: e.target.value })}
                                         />
                                     </div>
                                 </div>
-                                
+
                                 <div className="space-y-2">
                                     <Label className="text-xs">Status</Label>
                                     <Select
                                         value={dateFilter.status}
-                                        onValueChange={(val) => setDateFilter({...dateFilter, status: val})}
+                                        onValueChange={(val) => setDateFilter({ ...dateFilter, status: val })}
                                     >
                                         <SelectTrigger>
                                             <SelectValue placeholder="All statuses" />
@@ -528,7 +518,7 @@ export default function JobPost() {
                                         </SelectContent>
                                     </Select>
                                 </div>
-                                
+
                                 <div className="space-y-2">
                                     <Label className="text-xs">Quick Filters</Label>
                                     <div className="flex flex-col gap-2">
@@ -537,7 +527,7 @@ export default function JobPost() {
                                                 type="checkbox"
                                                 id="show_active"
                                                 checked={dateFilter.show_active}
-                                                onChange={(e) => setDateFilter({...dateFilter, show_active: e.target.checked})}
+                                                onChange={(e) => setDateFilter({ ...dateFilter, show_active: e.target.checked })}
                                                 className="w-4 h-4"
                                             />
                                             <Label htmlFor="show_active" className="text-sm">Show Active Only</Label>
@@ -547,7 +537,7 @@ export default function JobPost() {
                                                 type="checkbox"
                                                 id="show_expired"
                                                 checked={dateFilter.show_expired}
-                                                onChange={(e) => setDateFilter({...dateFilter, show_expired: e.target.checked})}
+                                                onChange={(e) => setDateFilter({ ...dateFilter, show_expired: e.target.checked })}
                                                 className="w-4 h-4"
                                             />
                                             <Label htmlFor="show_expired" className="text-sm">Show Expired</Label>
@@ -557,14 +547,14 @@ export default function JobPost() {
                                                 type="checkbox"
                                                 id="show_upcoming"
                                                 checked={dateFilter.show_upcoming}
-                                                onChange={(e) => setDateFilter({...dateFilter, show_upcoming: e.target.checked})}
+                                                onChange={(e) => setDateFilter({ ...dateFilter, show_upcoming: e.target.checked })}
                                                 className="w-4 h-4"
                                             />
                                             <Label htmlFor="show_upcoming" className="text-sm">Show Upcoming</Label>
                                         </div>
                                     </div>
                                 </div>
-                                
+
                                 <div className="flex gap-2">
                                     <Button onClick={applyFilters} size="sm" className="flex-1" disabled={isApplyingFilters}>
                                         {isApplyingFilters ? (
@@ -583,96 +573,96 @@ export default function JobPost() {
             </div>
 
             {/* Add/Edit Modal */}
-           <Dialog open={open} onOpenChange={setOpen}>
-  <DialogContent className="sm:max-w-[600px] md:max-w-[700px] lg:max-w-[800px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
-    <DialogHeader className="px-2 sm:px-0">
-      <DialogTitle className="text-lg sm:text-xl">
-        {editId ? 'Edit Job Post' : 'Add Job Post'}
-      </DialogTitle>
-      <DialogDescription className="text-sm sm:text-base">
-        {editId ? 'Update the job post details' : 'Create a new job post for alumni'}
-      </DialogDescription>
-    </DialogHeader>
-    
-    <form onSubmit={handleSubmit} className="space-y-4 mt-4">
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        <div className="space-y-2">
-          <Label className="text-sm sm:text-base">Job Title *</Label>
-          <Input 
-            placeholder="Job Title" 
-            value={data.title} 
-            onChange={(e) => setData('title', e.target.value)} 
-            required 
-            className="w-full"
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <Label className="text-sm sm:text-base">Company Name *</Label>
-          <Input 
-            placeholder="Company Name" 
-            value={data.company_name} 
-            onChange={(e) => setData('company_name', e.target.value)} 
-            required 
-            className="w-full"
-          />
-        </div>
-      </div>
-      
-      <div className="space-y-2">
-        <Label className="text-sm sm:text-base">Job Description *</Label>
-        <Textarea 
-          placeholder="Job Description" 
-          value={data.description} 
-          onChange={(e) => setData('description', e.target.value)} 
-          required 
-          rows={4}
-          className="w-full min-h-[120px]"
-        />
-      </div>
-      
-      {/* Location Input */}
-      <div className="space-y-2">
-        <Label className="text-sm sm:text-base">Location</Label>
-        <Tabs 
-          value={locationInputType} 
-          onValueChange={(val) => setLocationInputType(val as 'text' | 'link')}
-          className="w-full"
-        >
-          <TabsList className="grid w-full grid-cols-2 mb-2 h-10">
-            <TabsTrigger value="text" className="text-xs sm:text-sm py-1">
-              <MapPin className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              Type Location
-            </TabsTrigger>
-            <TabsTrigger value="link" className="text-xs sm:text-sm py-1">
-              <LinkIcon className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
-              Google Maps Link
-            </TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="text" className="space-y-1">
-            <Input 
-              placeholder="Enter location (e.g., 'New York, NY' or '123 Main St')" 
-              value={data.location} 
-              onChange={(e) => setData('location', e.target.value)}
-              className="w-full"
-            />
-            <p className="text-xs text-muted-foreground">
-              Enter the physical location of the job
-            </p>
-          </TabsContent>
-          
-          <TabsContent value="link" className="space-y-1">
-            <Input 
-              placeholder="Paste Google Maps link (e.g., https://goo.gl/maps/...)" 
-              value={data.location_link} 
-              onChange={(e) => setData('location_link', e.target.value)}
-              className="w-full"
-            />
-            <p className="text-xs text-muted-foreground">
-              Paste a Google Maps link to provide precise location
-            </p>
-            {/* {data.location_link && extractCoordinatesFromLink(data.location_link) && (
+            <Dialog open={open} onOpenChange={setOpen}>
+                <DialogContent className="sm:max-w-[600px] md:max-w-[700px] lg:max-w-[800px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
+                    <DialogHeader className="px-2 sm:px-0">
+                        <DialogTitle className="text-lg sm:text-xl">
+                            {editId ? 'Edit Job Post' : 'Add Job Post'}
+                        </DialogTitle>
+                        <DialogDescription className="text-sm sm:text-base">
+                            {editId ? 'Update the job post details' : 'Create a new job post for alumni'}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleSubmit} className="space-y-4 mt-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                            <div className="space-y-2">
+                                <Label className="text-sm sm:text-base">Job Title *</Label>
+                                <Input
+                                    placeholder="Job Title"
+                                    value={data.title}
+                                    onChange={(e) => setData('title', e.target.value)}
+                                    required
+                                    className="w-full"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-sm sm:text-base">Company Name *</Label>
+                                <Input
+                                    placeholder="Company Name"
+                                    value={data.company_name}
+                                    onChange={(e) => setData('company_name', e.target.value)}
+                                    required
+                                    className="w-full"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="text-sm sm:text-base">Job Description *</Label>
+                            <Textarea
+                                placeholder="Job Description"
+                                value={data.description}
+                                onChange={(e) => setData('description', e.target.value)}
+                                required
+                                rows={4}
+                                className="w-full min-h-[120px]"
+                            />
+                        </div>
+
+                        {/* Location Input */}
+                        <div className="space-y-2">
+                            <Label className="text-sm sm:text-base">Location</Label>
+                            <Tabs
+                                value={locationInputType}
+                                onValueChange={(val) => setLocationInputType(val as 'text' | 'link')}
+                                className="w-full"
+                            >
+                                <TabsList className="grid w-full grid-cols-2 mb-2 h-10">
+                                    <TabsTrigger value="text" className="text-xs sm:text-sm py-1">
+                                        <MapPin className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                                        Type Location
+                                    </TabsTrigger>
+                                    <TabsTrigger value="link" className="text-xs sm:text-sm py-1">
+                                        <LinkIcon className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+                                        Google Maps Link
+                                    </TabsTrigger>
+                                </TabsList>
+
+                                <TabsContent value="text" className="space-y-1">
+                                    <Input
+                                        placeholder="Enter location (e.g., 'New York, NY' or '123 Main St')"
+                                        value={data.location}
+                                        onChange={(e) => setData('location', e.target.value)}
+                                        className="w-full"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Enter the physical location of the job
+                                    </p>
+                                </TabsContent>
+
+                                <TabsContent value="link" className="space-y-1">
+                                    <Input
+                                        placeholder="Paste Google Maps link (e.g., https://goo.gl/maps/...)"
+                                        value={data.location_link}
+                                        onChange={(e) => setData('location_link', e.target.value)}
+                                        className="w-full"
+                                    />
+                                    <p className="text-xs text-muted-foreground">
+                                        Paste a Google Maps link to provide precise location
+                                    </p>
+                                    {/* {data.location_link && extractCoordinatesFromLink(data.location_link) && (
               <div className="text-xs text-green-600 flex items-center">
                 <MapPin className="h-3 w-3 mr-1" />
                 Valid Google Maps link detected
@@ -683,68 +673,68 @@ export default function JobPost() {
                 This doesn't appear to be a valid Google Maps link
               </div>
             )} */}
-          </TabsContent>
-        </Tabs>
-      </div>
-      
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        <div className="space-y-2">
-          <Label className="text-sm sm:text-base">Requirements</Label>
-          <Textarea 
-            placeholder="Requirements" 
-            value={data.requirements} 
-            onChange={(e) => setData('requirements', e.target.value)} 
-            rows={3}
-            className="w-full min-h-[100px]"
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <Label className="text-sm sm:text-base">Responsibilities</Label>
-          <Textarea
-            placeholder="Responsibilities"
-            value={data.responsibilities}
-            onChange={(e) => setData('responsibilities', e.target.value)}
-            rows={3}
-            className="w-full min-h-[100px]"
-          />
-        </div>
-      </div>
-      
-      <div className="space-y-2">
-        <Label className="text-sm sm:text-base">Apply Link</Label>
-        <Input 
-          placeholder="Apply Link" 
-          value={data.apply_link} 
-          onChange={(e) => setData('apply_link', e.target.value)} 
-          className="w-full"
-        />
-      </div>
-      
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-        <div className="space-y-2">
-          <Label className="text-sm sm:text-base">Posted Date</Label>
-          <Input 
-            type="date" 
-            value={data.posted_date} 
-            onChange={(e) => setData('posted_date', e.target.value)} 
-            className="w-full"
-          />
-          <p className="text-xs text-muted-foreground">When job was posted</p>
-        </div>
-        <div className="space-y-2">
-          <Label className="text-sm sm:text-base">Application Deadline</Label>
-          <Input 
-            type="date" 
-            value={data.application_deadline} 
-            onChange={(e) => setData('application_deadline', e.target.value)} 
-            min={data.posted_date || undefined}
-            className="w-full"
-          />
-          <p className="text-xs text-muted-foreground">Deadline for applications</p>
-        </div>
-        
-        {/* <div className="space-y-2">
+                                </TabsContent>
+                            </Tabs>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                            <div className="space-y-2">
+                                <Label className="text-sm sm:text-base">Requirements</Label>
+                                <Textarea
+                                    placeholder="Requirements"
+                                    value={data.requirements}
+                                    onChange={(e) => setData('requirements', e.target.value)}
+                                    rows={3}
+                                    className="w-full min-h-[100px]"
+                                />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-sm sm:text-base">Responsibilities</Label>
+                                <Textarea
+                                    placeholder="Responsibilities"
+                                    value={data.responsibilities}
+                                    onChange={(e) => setData('responsibilities', e.target.value)}
+                                    rows={3}
+                                    className="w-full min-h-[100px]"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="text-sm sm:text-base">Apply Link</Label>
+                            <Input
+                                placeholder="Apply Link"
+                                value={data.apply_link}
+                                onChange={(e) => setData('apply_link', e.target.value)}
+                                className="w-full"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+                            <div className="space-y-2">
+                                <Label className="text-sm sm:text-base">Posted Date</Label>
+                                <Input
+                                    type="date"
+                                    value={data.posted_date}
+                                    onChange={(e) => setData('posted_date', e.target.value)}
+                                    className="w-full"
+                                />
+                                <p className="text-xs text-muted-foreground">When job was posted</p>
+                            </div>
+                            <div className="space-y-2">
+                                <Label className="text-sm sm:text-base">Application Deadline</Label>
+                                <Input
+                                    type="date"
+                                    value={data.application_deadline}
+                                    onChange={(e) => setData('application_deadline', e.target.value)}
+                                    min={data.posted_date || undefined}
+                                    className="w-full"
+                                />
+                                <p className="text-xs text-muted-foreground">Deadline for applications</p>
+                            </div>
+
+                            {/* <div className="space-y-2">
           <Label className="text-sm sm:text-base">Job Start Date</Label>
           <Input 
             type="date" 
@@ -756,48 +746,48 @@ export default function JobPost() {
           <p className="text-xs text-muted-foreground">When job starts</p>
         </div>
          */}
-        
-      </div>
-      
-      <div className="space-y-2">
-        <Label className="text-sm sm:text-base block font-medium">Status</Label>
-        <Select 
-          value={data.status} 
-          onValueChange={(val: 'active' | 'inactive') => setData('status', val)}
-        >
-          <SelectTrigger className="w-full">
-            <SelectValue placeholder="Select Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="inactive">Inactive</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
 
-      <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0 mt-6 px-2 sm:px-0">
-        <Button 
-          type="button" 
-          variant="outline" 
-          onClick={() => setOpen(false)}
-          className="w-full sm:w-auto order-2 sm:order-1"
-        >
-          Cancel
-        </Button>
-        <Button 
-          type="submit" 
-          disabled={processing}
-          className="w-full sm:w-auto order-1 sm:order-2 mb-2 sm:mb-0 sm:ml-2"
-        >
-          {processing ? (
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          ) : null}
-          {editId ? 'Update' : 'Create'} Job Post
-        </Button>
-      </DialogFooter>
-    </form>
-  </DialogContent>
-</Dialog>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label className="text-sm sm:text-base block font-medium">Status</Label>
+                            <Select
+                                value={data.status}
+                                onValueChange={(val: 'active' | 'inactive') => setData('status', val)}
+                            >
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="inactive">Inactive</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0 mt-6 px-2 sm:px-0">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setOpen(false)}
+                                className="w-full sm:w-auto order-2 sm:order-1"
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={processing}
+                                className="w-full sm:w-auto order-1 sm:order-2 mb-2 sm:mb-0 sm:ml-2"
+                            >
+                                {processing ? (
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : null}
+                                {editId ? 'Update' : 'Create'} Job Post
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
 
             {/* View Job Details Modal */}
             <Dialog open={viewOpen} onOpenChange={setViewOpen}>
@@ -808,7 +798,7 @@ export default function JobPost() {
                             Complete information about the job posting
                         </DialogDescription>
                     </DialogHeader>
-                    
+
                     {viewJob && (
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -816,26 +806,26 @@ export default function JobPost() {
                                     <Label className="font-semibold">Job Title</Label>
                                     <p>{viewJob.title}</p>
                                 </div>
-                                
+
                                 <div>
                                     <Label className="font-semibold">Company</Label>
                                     <p>{viewJob.company_name}</p>
                                 </div>
                             </div>
-                            
+
                             <div>
                                 <Label className="font-semibold">Description</Label>
                                 <p className="whitespace-pre-line break-all">{viewJob.description}</p>
                             </div>
-                            
+
                             {(viewJob.location || viewJob.location_link) && (
                                 <div>
                                     <Label className="font-semibold">Location</Label>
                                     {viewJob.location_link ? (
                                         <div className="mt-1">
-                                            <a 
-                                                href={viewJob.location_link} 
-                                                target="_blank" 
+                                            <a
+                                                href={viewJob.location_link}
+                                                target="_blank"
                                                 rel="noopener noreferrer"
                                                 className="text-blue-600 hover:underline inline-flex items-center"
                                             >
@@ -851,7 +841,7 @@ export default function JobPost() {
                                     )}
                                 </div>
                             )}
-                            
+
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 {viewJob.requirements && (
                                     <div>
@@ -859,7 +849,7 @@ export default function JobPost() {
                                         <p className="whitespace-pre-line">{viewJob.requirements}</p>
                                     </div>
                                 )}
-                                
+
                                 {viewJob.responsibilities && (
                                     <div>
                                         <Label className="font-semibold">Responsibilities</Label>
@@ -867,9 +857,9 @@ export default function JobPost() {
                                     </div>
                                 )}
                             </div>
-                            
+
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                         
+
 
                                 <div>
                                     <Label className="font-semibold">Start Date</Label>
@@ -879,7 +869,7 @@ export default function JobPost() {
                                     )}
                                 </div>
 
-                                 <div>
+                                <div>
                                     <Label className="font-semibold">Application Deadline</Label>
                                     <p>{formatDate(viewJob.application_deadline)}</p>
                                     {isJobExpired(viewJob) && (
@@ -887,13 +877,13 @@ export default function JobPost() {
                                     )}
                                 </div>
                             </div>
-                            
+
                             <div>
                                 <Label className="font-semibold">Status</Label>
                                 <div className="mt-1">
                                     <Badge variant={isJobActive(viewJob) ? "default" : "secondary"} className={
-                                        isJobActive(viewJob) 
-                                            ? "bg-green-100 text-green-800 hover:bg-green-100" 
+                                        isJobActive(viewJob)
+                                            ? "bg-green-100 text-green-800 hover:bg-green-100"
                                             : "bg-red-100 text-red-800 hover:bg-red-100"
                                     }>
                                         {isJobActive(viewJob) ? 'ACTIVE' : 'INACTIVE'}
@@ -902,13 +892,13 @@ export default function JobPost() {
                                     </Badge>
                                 </div>
                             </div>
-                            
+
                             {viewJob.apply_link && (
                                 <div>
                                     <Label className="font-semibold">Apply Link</Label>
-                                    <a 
-                                        href={viewJob.apply_link} 
-                                        target="_blank" 
+                                    <a
+                                        href={viewJob.apply_link}
+                                        target="_blank"
                                         rel="noopener noreferrer"
                                         className="text-blue-600 hover:underline block mt-1 break-all"
                                     >
@@ -918,7 +908,7 @@ export default function JobPost() {
                             )}
                         </div>
                     )}
-                    
+
                     <DialogFooter>
                         <Button onClick={() => setViewOpen(false)}>Close</Button>
                     </DialogFooter>
@@ -1046,7 +1036,7 @@ export default function JobPost() {
                                 </SelectContent>
                             </Select>
                         </div>
-                        
+
                         {selectedJobs.length > 0 && (
                             <Button variant="destructive" onClick={() => setShowBulkDeleteModal(true)} className="sm:w-auto">
                                 <Trash className="mr-2 h-4 w-4" />
@@ -1070,7 +1060,7 @@ export default function JobPost() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-12">
-                                        {/* <Input
+                                    {/* <Input
                                             type="checkbox"
                                             className="w-4 h-4"
                                             checked={selectedJobs.length === jobs.length && jobs.length > 0}
@@ -1101,7 +1091,7 @@ export default function JobPost() {
                                     const isActive = isJobActive(job);
                                     const isExpired = isJobExpired(job);
                                     const isUpcoming = isJobUpcoming(job);
-                                    
+
                                     return (
                                         <TableRow key={job.id} className={!isActive ? 'opacity-70 bg-muted/30' : ''}>
                                             <TableCell>
@@ -1116,9 +1106,9 @@ export default function JobPost() {
                                             <TableCell>{job.company_name}</TableCell>
                                             <TableCell>
                                                 {job.location_link ? (
-                                                    <a 
-                                                        href={job.location_link} 
-                                                        target="_blank" 
+                                                    <a
+                                                        href={job.location_link}
+                                                        target="_blank"
                                                         rel="noopener noreferrer"
                                                         className="text-blue-600 hover:underline inline-flex items-center text-sm"
                                                     >
@@ -1132,7 +1122,7 @@ export default function JobPost() {
                                             <TableCell>
                                                 <div className="flex flex-col">
                                                     <span>{formatDate(job.application_deadline)}</span>
-                                                   
+
                                                     {isExpired && (
                                                         <span className="text-xs text-red-500">Expired</span>
                                                     )}
@@ -1143,8 +1133,8 @@ export default function JobPost() {
                                             </TableCell>
                                             <TableCell>
                                                 <Badge variant={isActive ? "default" : "secondary"} className={
-                                                    isActive 
-                                                        ? "bg-green-100 text-green-800 hover:bg-green-100" 
+                                                    isActive
+                                                        ? "bg-green-100 text-green-800 hover:bg-green-100"
                                                         : "bg-red-100 text-red-800 hover:bg-red-100"
                                                 }>
                                                     {isActive ? 'ACTIVE' : 'INACTIVE'}
@@ -1166,9 +1156,9 @@ export default function JobPost() {
                                                     }} title="Delete">
                                                         <Trash2 className="h-4 w-4" />
                                                     </Button>
-                                                    <Button 
-                                                        size="sm" 
-                                                        variant="outline" 
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
                                                         onClick={() => {
                                                             setEmailJobId(job.id);
                                                             setShowEmailModal(true);
@@ -1188,7 +1178,7 @@ export default function JobPost() {
                             )}
                         </TableBody>
                     </Table>
-                    
+
                     {/* Pagination Controls */}
                     {totalPages > 1 && (
                         <div className="flex items-center justify-between mt-4">
@@ -1204,7 +1194,7 @@ export default function JobPost() {
                                 >
                                     <ChevronLeft className="h-4 w-4" />
                                 </Button>
-                                
+
                                 {/* Page numbers */}
                                 <div className="flex items-center space-x-1">
                                     {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
@@ -1219,7 +1209,7 @@ export default function JobPost() {
                                         </Button>
                                     ))}
                                 </div>
-                                
+
                                 <Button
                                     variant="outline"
                                     size="sm"

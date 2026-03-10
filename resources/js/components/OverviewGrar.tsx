@@ -72,7 +72,7 @@ export function GraduatesLineChart() {
   const peakYear = data.length > 0 ? data.reduce((max, item) => item.total > max.total ? item : max, data[0]) : null
 
   return (
-    <Card className="w-full rounded-xl border-0 dark:border-1 shadow-sm bg-background text-foreground">
+    <Card className="w-full rounded-xl border-0 bg-background text-foreground shadow-sm dark:border-1">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div>

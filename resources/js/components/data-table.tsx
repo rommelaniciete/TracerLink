@@ -58,7 +58,14 @@ export function AlumniTable() {
     const [editingAlumni, setEditingAlumni] = React.useState<Alumni | null>(null);
     const [sorting, setSorting] = React.useState<SortingState>([]);
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([]);
-    const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({});
+    const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({
+        middle_initial: false,
+        present_address: false,
+        company_name: false,
+        further_studies: false,
+        work_location: false,
+        employer_classification: false,
+    });
     const [rowSelection, setRowSelection] = React.useState<Record<string, boolean>>({});
     const [sendEmailOpen, setSendEmailOpen] = React.useState(false);
     const [importOpen, setImportOpen] = React.useState(false);
@@ -66,7 +73,10 @@ export function AlumniTable() {
     const [filter, setFilter] = React.useState<string>();
     const [pageSize, setPageSize] = React.useState(10);
     const [bulkDeleteOpen, setBulkDeleteOpen] = React.useState(false);
+    const [deleteConfirmOpen, setDeleteConfirmOpen] = React.useState(false);
+    const [pendingDeleteAlumni, setPendingDeleteAlumni] = React.useState<Alumni | null>(null);
     const [globalFilter, setGlobalFilter] = React.useState<string>('');
+    const [viewingAlumni, setViewingAlumni] = React.useState<Alumni | null>(null);
 
     // Loading states for all actions
     const [deleteLoading, setDeleteLoading] = React.useState<number | null>(null);
@@ -123,6 +133,19 @@ export function AlumniTable() {
             .finally(() => {
                 setDeleteLoading(null);
             });
+    };
+
+    const openDeleteConfirm = (alumni: Alumni) => {
+        setPendingDeleteAlumni(alumni);
+        setDeleteConfirmOpen(true);
+    };
+
+    const confirmSingleDelete = () => {
+        if (!pendingDeleteAlumni?.id) return;
+
+        handleDelete(pendingDeleteAlumni.id);
+        setDeleteConfirmOpen(false);
+        setPendingDeleteAlumni(null);
     };
 
     const handleBulkDelete = async () => {
@@ -312,6 +335,22 @@ export function AlumniTable() {
         };
     }, []); // Empty dependency array
 
+    const resolveProgramName = (programValue: Alumni['program_id']) => {
+        const programId =
+            programValue && typeof programValue === 'object' && 'id' in programValue && programValue.id != null
+                ? (programValue as { id: number }).id
+                : Number(programValue);
+
+        const prog = programs.find((p) => p.id === programId);
+        if (prog) return prog.name;
+
+        if (programValue && typeof programValue === 'object' && 'name' in programValue) {
+            return (programValue as { name?: string }).name || 'N/A';
+        }
+
+        return 'N/A';
+    };
+
     const columns: ColumnDef<Alumni>[] = [
         {
             id: 'select',
@@ -378,9 +417,10 @@ export function AlumniTable() {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => setViewingAlumni(alumni)}>View details</DropdownMenuItem>
                             <DropdownMenuItem
                                 className="text-red-600 hover:text-red-500"
-                                onClick={() => handleDelete(alumni.id)}
+                                onClick={() => openDeleteConfirm(alumni)}
                                 disabled={deleteLoading === alumni.id}
                             >
                                 {deleteLoading === alumni.id ? 'Deleting...' : 'Delete'}
@@ -808,6 +848,93 @@ export function AlumniTable() {
                 </DialogContent>
             </Dialog>
 
+            {/* View Alumni Modal */}
+            <Dialog
+                open={Boolean(viewingAlumni)}
+                onOpenChange={(open) => {
+                    if (!open) setViewingAlumni(null);
+                }}
+            >
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Alumni Details</DialogTitle>
+                        <DialogDescription>Complete alumni information for this record.</DialogDescription>
+                    </DialogHeader>
+
+                    {viewingAlumni && (
+                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                            {[
+                                ['Student Number', viewingAlumni.student_number || 'N/A'],
+                                ['Email', viewingAlumni.email || 'N/A'],
+                                ['Program', resolveProgramName(viewingAlumni.program_id)],
+                                ['Last Name', viewingAlumni.last_name || 'N/A'],
+                                ['Given Name', viewingAlumni.given_name || 'N/A'],
+                                ['Middle Initial', viewingAlumni.middle_initial || 'N/A'],
+                                ['Present Address', viewingAlumni.present_address || 'N/A'],
+                                ['Contact Number', viewingAlumni.contact_number || 'N/A'],
+                                ['Graduation Year', viewingAlumni.graduation_year?.toString() || 'N/A'],
+                                ['Sex', viewingAlumni.sex || 'N/A'],
+                                ['Employment Status', viewingAlumni.employment_status || 'N/A'],
+                                ['Company Name', viewingAlumni.company_name || 'N/A'],
+                                ['Related to Course', viewingAlumni.related_to_course || 'N/A'],
+                                ['Further Studies', viewingAlumni.further_studies || 'N/A'],
+                                ['Work Location', viewingAlumni.work_location || 'N/A'],
+                                ['Employer Type', viewingAlumni.employer_classification || 'N/A'],
+                                ['Sector', viewingAlumni.sector || 'N/A'],
+                                ['Consent', viewingAlumni.consent ? 'Yes' : 'No'],
+                                ['Instruction Rating', viewingAlumni.instruction_rating?.toString() || 'N/A'],
+                            ].map(([label, value]) => (
+                                <div key={String(label)} className="space-y-1 rounded-md border p-3">
+                                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
+                                    <p className="break-words text-sm">{value}</p>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Single Delete Confirmation */}
+            <Dialog
+                open={deleteConfirmOpen}
+                onOpenChange={(open) => {
+                    setDeleteConfirmOpen(open);
+                    if (!open) setPendingDeleteAlumni(null);
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Confirm Delete</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to delete{' '}
+                            <b>
+                                {pendingDeleteAlumni?.given_name} {pendingDeleteAlumni?.last_name}
+                            </b>
+                            ? This action cannot be undone.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button
+                            variant="ghost"
+                            onClick={() => {
+                                setDeleteConfirmOpen(false);
+                                setPendingDeleteAlumni(null);
+                            }}
+                            disabled={deleteLoading === pendingDeleteAlumni?.id}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={confirmSingleDelete}
+                            disabled={deleteLoading === pendingDeleteAlumni?.id}
+                        >
+                            {deleteLoading === pendingDeleteAlumni?.id ? 'Deleting...' : 'Delete'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {/* Import Alumni Modal */}
             <Dialog open={importOpen} onOpenChange={setImportOpen}>
                 <DialogContent>
@@ -847,12 +974,17 @@ export function AlumniTable() {
                 <div className="py-10 text-center text-muted-foreground">Loading alumni data...</div>
             ) : (
                 <div className="rounded-md border">
-                    <Table>
+                    <Table className="w-full">
                         <TableHeader>
                             {table.getHeaderGroups().map((headerGroup) => (
                                 <TableRow key={headerGroup.id}>
                                     {headerGroup.headers.map((header) => (
-                                        <TableHead key={header.id} className="font-semibold">
+                                        <TableHead
+                                            key={header.id}
+                                            className={`font-semibold ${
+                                                header.column.id === 'select' ? 'w-10 px-2' : header.column.id === 'actions' ? 'w-16 px-2' : ''
+                                            }`}
+                                        >
                                             {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                                         </TableHead>
                                     ))}
@@ -865,7 +997,16 @@ export function AlumniTable() {
                                 table.getRowModel().rows.map((row) => (
                                     <TableRow key={row.id} data-state={row.getIsSelected() && 'selected'}>
                                         {row.getVisibleCells().map((cell) => (
-                                            <TableCell key={cell.id}>
+                                            <TableCell
+                                                key={cell.id}
+                                                className={
+                                                    cell.column.id === 'select'
+                                                        ? 'w-10 px-2 align-top'
+                                                        : cell.column.id === 'actions'
+                                                          ? 'w-16 px-2 align-top'
+                                                          : 'max-w-[220px] truncate align-top'
+                                                }
+                                            >
                                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                             </TableCell>
                                         ))}

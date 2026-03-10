@@ -126,7 +126,7 @@ export default function GenderChart() {
   };
 
   return (
-    <Card className="h-md w-full rounded-xl border-0 dark:border-1 bg-background text-foreground shadow-sm">
+    <Card className="w-full rounded-xl border-0 bg-background text-foreground shadow-sm dark:border-1">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div>

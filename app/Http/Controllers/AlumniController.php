@@ -9,6 +9,7 @@ use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use App\Events\AlumniCreated;
 use App\Exports\AlumniTemplateExport;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 class AlumniController extends Controller
 {
@@ -70,7 +71,7 @@ class AlumniController extends Controller
             'consent' => 'accepted',
         ]);
 
-        if ($validated['employment_status'] !== 'employed') {
+        if (strtolower((string) $validated['employment_status']) !== 'employed') {
             $validated['company_name'] = null;
             $validated['work_position'] = null;
             $validated['sector'] = null;
@@ -85,7 +86,7 @@ class AlumniController extends Controller
         // 🔔 FIX: Use broadcast() instead of event() for WebSocket broadcasting
           broadcast(new AlumniCreated($alumni))->toOthers();
         
-        \Log::info('Alumni created and broadcasted', ['alumni_id' => $alumni->id]);
+        Log::info('Alumni created and broadcasted', ['alumni_id' => $alumni->id]);
 
         return response()->json([
             'message' => '🎉 Alumni added successfully!',
@@ -98,7 +99,7 @@ class AlumniController extends Controller
             'message' => '❌ Validation failed.',
         ], 422);
     } catch (\Exception $e) {
-        \Log::error('Error creating alumni: ' . $e->getMessage());
+        Log::error('Error creating alumni: ' . $e->getMessage());
         return response()->json([
             'message' => '❌ Server error occurred.',
             'error' => $e->getMessage(),
@@ -141,7 +142,7 @@ class AlumniController extends Controller
                 'consent' => 'accepted',
             ]);
 
-            if ($validated['employment_status'] !== 'employed') {
+            if (strtolower((string) $validated['employment_status']) !== 'employed') {
                 $validated['company_name'] = null;
                 $validated['work_position'] = null;
                 $validated['sector'] = null;

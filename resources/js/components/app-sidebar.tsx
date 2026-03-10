@@ -24,6 +24,7 @@ import {
   FolderMinusIcon,
   GraduationCap,
   FileText,
+  Info,
 } from 'lucide-react';
 import AppLogo from './app-logo';
 import AppearanceTabs from './appearance-tabs';
@@ -45,7 +46,7 @@ const primaryNavItems: NavItem[] = [
     title: 'Analytics',
     href: '/data',
     icon: ChartLine,
-  }, 
+  },
 ];
 
 //bot
@@ -59,11 +60,11 @@ const secondaryNavItems: NavItem[] = [
     title: 'Manage Job Posts',
     href: '/jobpost',
     icon: FileText,
-  },  
+  },
 ];
 
 const ThirdNavItems: NavItem[] = [
-    {
+  {
     title: 'Employability Report',
     href: '/employability',
     icon: BookOpen,
@@ -71,7 +72,11 @@ const ThirdNavItems: NavItem[] = [
 ];
 
 const footerNavItems: NavItem[] = [
- 
+  {
+    title: 'About Us',
+    href: '/about',
+    icon: Info,
+  },
 ];
 
 export function AppSidebar() {
@@ -94,11 +99,13 @@ export function AppSidebar() {
         <SidebarGroupLabel>Overview</SidebarGroupLabel>
         <NavMain items={primaryNavItems} />
         {/* Group 2 */}
-         <SidebarGroupLabel>Management</SidebarGroupLabel>
+        <SidebarGroupLabel>Management</SidebarGroupLabel>
         <NavMain items={secondaryNavItems} />
         {/* Group 3 */}
         <SidebarGroupLabel>Print Report</SidebarGroupLabel>
         <NavMain items={ThirdNavItems} />
+        <SidebarGroupLabel>About Us</SidebarGroupLabel>
+        <NavMain items={footerNavItems} />
       </SidebarContent>
 
       <SidebarFooter>

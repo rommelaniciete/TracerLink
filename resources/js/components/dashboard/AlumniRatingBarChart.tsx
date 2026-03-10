@@ -31,7 +31,7 @@ export default function AlumniRatingBarChart({ ratingCounts }: Props) {
     });
 
     return (
-        <Card className="rounded-xl border-0 dark:border-1 bg-background shadow-lg">
+        <Card className="rounded-xl border-0 bg-background shadow-lg dark:border-1">
             <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                     <div>
