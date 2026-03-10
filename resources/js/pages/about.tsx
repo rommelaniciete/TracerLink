@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Mail, Github, Linkedin, MapPin, Calendar } from 'lucide-react';
+import { Mail, Github, Linkedin, MapPin, Calendar, Facebook } from 'lucide-react';
 import { type BreadcrumbItem } from '@/types';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -18,13 +18,14 @@ const teamMembers = [
     { 
         name: 'Rommel Aniciete', 
         role: 'UI/UX Designer / Frontend Developer',
-        skills: ['UI Design', 'React', 'Figma'],
+        skills: ['Frontent Developer','UI Design', 'React', 'Figma'],
         location: 'Pampanga, PH',
         joined: '2023',
         social: {
-            github: '#',
-            linkedin: '#',
-            email: 'rommel@alumnitracer.com'
+            github: 'https://github.com/rommelaniciete2',
+            linkedin: 'https://www.linkedin.com/in/rommel-aniciete-8194a73b6/',
+            email: 'rommelaniciete6@gmail.com',
+            facebook: 'https://www.facebook.com/ok.ezme/'
         }
     },
     { 
@@ -34,9 +35,9 @@ const teamMembers = [
         location: 'Pampanga, PH',
         joined: '2023',
         social: {
-            github: '#',
-            linkedin: '#',
-            email: 'jhonamar@alumnitracer.com'
+            github: 'https://github.com/Jhonmar-bernardo2',
+            facebook:'https://www.facebook.com/jhonmar.bernardo.2024',
+            email: 'jhonamar22@gmail.com'
         }
     },
     { 
@@ -46,8 +47,7 @@ const teamMembers = [
         location: 'Bataan, PH',
         joined: '2024',
         social: {
-            linkedin: '#',
-            email: 'riana@alumnitracer.com'
+            facebook:'https://www.facebook.com/100005065722794'
         }
     },
     { 
@@ -57,8 +57,7 @@ const teamMembers = [
         location: 'Pampanga, PH',
         joined: '2024',
         social: {
-            linkedin: '#',
-            email: 'andrew@alumnitracer.com'
+            facebook:'https://www.facebook.com/andrew.manalansan.361133'
         }
     },
     { 
@@ -68,8 +67,7 @@ const teamMembers = [
         location: 'Pampanga, PH',
         joined: '2024',
         social: {
-            linkedin: '#',
-            email: 'andrey@alumnitracer.com'
+           facebook:'https://www.facebook.com/johnandrey.orogo.77'
         }
     },
     { 
@@ -79,8 +77,7 @@ const teamMembers = [
         location: 'Bataan, PH',
         joined: '2024',
         social: {
-            linkedin: '#',
-            email: 'aj@alumnitracer.com'
+            facebook:'https://www.facebook.com/aj.rafael.831727'
         }
     },
 ];
@@ -108,7 +105,7 @@ export default function AboutPage() {
                     <CardHeader>
                         <CardTitle>Development Team</CardTitle>
                         <CardDescription>
-                            {teamMembers.length} core members working on the system
+                            {teamMembers.length} core members worked on the system
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
@@ -185,6 +182,14 @@ export default function AboutPage() {
                                                     <Mail className="h-4 w-4" />
                                                 </a>
                                             )}
+                                            {member.social.facebook && (
+                                                <a 
+                                                    href={member.social.facebook}
+                                                    className="text-muted-foreground hover:text-foreground transition-colors"
+                                                >
+                                                    <Facebook className="h-4 w-4" />
+                                                </a>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -203,14 +208,14 @@ export default function AboutPage() {
                     </Card>
                     <Card>
                         <CardContent className="p-4 text-center">
-                            <p className="text-2xl font-bold">2023</p>
+                            <p className="text-2xl font-bold">2025</p>
                             <p className="text-xs text-muted-foreground">Year Started</p>
                         </CardContent>
                     </Card>
                     <Card>
                         <CardContent className="p-4 text-center">
-                            <p className="text-2xl font-bold">6</p>
-                            <p className="text-xs text-muted-foreground">Programs</p>
+                            <p className="text-2xl font-bold">4C</p>
+                            <p className="text-xs text-muted-foreground">Bachelor of Science In Information Technology</p>
                         </CardContent>
                     </Card>
                 </div>
