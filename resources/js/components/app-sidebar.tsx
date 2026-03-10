@@ -108,8 +108,7 @@ export function AppSidebar() {
         <NavMain items={footerNavItems} />
       </SidebarContent>
 
-      <SidebarFooter>
-        <NavFooter items={footerNavItems} className="mt-auto" />
+      <SidebarFooter> 
         <SidebarGroupLabel>Manage account and other settings.</SidebarGroupLabel>
         <NavUser />
       </SidebarFooter>

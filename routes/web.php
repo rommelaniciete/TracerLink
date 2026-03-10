@@ -23,7 +23,7 @@ use App\Http\Controllers\{
     TotalGraduatesController,
     AlumniImportController,
     GenderChartController,
-    EmployabilityController, 
+    EmployabilityController,
     TestController,
 };
 use App\Exports\StudentTemplateExport;
@@ -33,12 +33,12 @@ use Illuminate\Support\Facades\Mail;
 
 // 🌐 Public Welcome Page
 // Route::get('/', fn () => Inertia::render('welcome'))->name('home');
-Route::get('/', function(){
+Route::get('/', function () {
     return redirect()->route('login');
 })->name('home');
 
 
-Route::get('TestPage', function(){
+Route::get('TestPage', function () {
     return 'capital case is working';
 });
 
@@ -48,7 +48,7 @@ Route::get('/alumni-form/{student_number}', [AlumniFormController::class, 'show'
 Route::post('/alumni-form/{student_number}/submit', [AlumniFormController::class, 'store'])->name('alumni.store');
 
 // 🔗 Blank Form (Public Link)
-Route::get('/alumni-form-link', fn () => Inertia::render('AlumniForm'))->name('alumni.form.link');
+Route::get('/alumni-form-link', fn() => Inertia::render('AlumniForm'))->name('alumni.form.link');
 
 // 🔄 Alumni Update via Signed Link
 Route::get('/alumni-update-form/{student_number}', [UpdateAlumniFormController::class, 'show'])
@@ -75,7 +75,7 @@ Route::get('/chart/total-graduates', [TotalGraduatesController::class, 'total'])
 Route::get('/chart/gender', [GenderChartController::class, 'genderData'])->name('chart.gender');
 
 // 🧪 Test Email Blade Preview
-Route::get('/test-email-view', fn () => view('emails.AlumniUpdateForm', [
+Route::get('/test-email-view', fn() => view('emails.AlumniUpdateForm', [
     'student' => (object)[
         'student_number' => '2023-00001',
         'given_name' => 'Juan',
@@ -92,6 +92,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // 📊 Dashboard Page
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
     Route::get('/dashboard/program-counts', [DashboardController::class, 'programCounts'])->name('dashboard.program.counts');
+    Route::get('/about', fn() => Inertia::render('about'))->name('about');
 
     // 📧 Email Sending
     Route::post('/send-email', [SendController::class, 'sendEmail'])->name('email.send');
@@ -128,7 +129,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // 🧠 API for Frontend Fetching
     Route::get('/alumni-form', [ProgramController::class, 'create']);
     Route::get('/alumni/create', [AlumniController::class, 'create']);
-    Route::get('/api/programs', fn () => \App\Models\Program::select('id', 'name')->orderBy('name')->get());
+    Route::get('/api/programs', fn() => \App\Models\Program::select('id', 'name')->orderBy('name')->get());
 
     // ✅ Import Alumni (main + alias para sa React)
     Route::post('/alumni/import', [AlumniImportController::class, 'import'])->name('alumni.import');
@@ -166,7 +167,7 @@ Route::get('/settings/program', function () {
     ]);
 });
 
-Route::get('/test-realtime', function() {
+Route::get('/test-realtime', function () {
     event(new \App\Events\TestRealtime('Hello from Laravel!'));
     return 'Event fired!';
 });
@@ -180,7 +181,7 @@ Route::get('/test-broadcast', function () {
     return 'Event broadcasted!';
 });
 
-Route::get('/api/programs', function() {
+Route::get('/api/programs', function () {
     return response()->json(\App\Models\Program::all());
 });
 
