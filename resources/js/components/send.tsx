@@ -10,13 +10,20 @@ import { PageProps } from '@/types';
 import { router, useForm, usePage } from '@inertiajs/react';
 import { ColumnDef, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, SortingState, useReactTable, } from '@tanstack/react-table';
 import axios from 'axios';
-import { ChevronDown, ChevronsUpDown, ChevronUp, DownloadIcon, FileUp, Loader2, Menu, MoreHorizontal, PlusIcon, Search, Trash, Upload, X, } from 'lucide-react';
+import { ChevronDown, ChevronsUpDown, ChevronUp, DownloadIcon, FileUp, Loader2, Menu, MoreHorizontal, PlusIcon, Search, Trash, Upload, Users, X, } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { saveAs } from 'file-saver';
 import * as XLSX from 'xlsx';
 import { SendEmailToSelected } from './SendEmailToProgram';
-
+import {
+    Empty,
+    EmptyContent,
+    EmptyDescription,
+    EmptyHeader,
+    EmptyMedia,
+    EmptyTitle,
+} from "@/components/ui/empty"
 export type Student = {
     id: number;
     student_number: string;
@@ -377,7 +384,7 @@ export default function StudentIndex() {
     };
 
     return (
-        <div className="w-full p-4 sm:p-6">
+        <div className="w-full p-6">
 
             {/* Mobile Menu Button */}
             <div className="mb-4 block md:hidden">
@@ -388,8 +395,8 @@ export default function StudentIndex() {
 
             {/* Header */}
             <div className="mb-6">
-                <h1 className="text-2xl font-bold tracking-tight">Alumni Management</h1>
-                <p className="mt-2 text-sm sm:text-base">Manage your alumni records and communications</p>
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground">Alumni Management</h1>
+                <p className="mt-1 text-sm text-muted-foreground">Manage your alumni records and communications</p>
             </div>
 
             {/* Controls */}
@@ -436,13 +443,14 @@ export default function StudentIndex() {
                             <span className="hidden sm:inline">Add New</span>
                         </Button> */}
                         <Button
-                        size="sm"
+                            variant="outline"
+                            size="sm"
                             onClick={() => {
                                 reset()
                                 setEditId(null)
                                 setShowModal(true)
                             }}
-                            className="w-full gap-2 md:w-auto border-2 border-dashed border-primary bg-transparent text-primary hover:bg-primary/10"
+                            className="w-full gap-2 md:w-auto"
                         >
                             <PlusIcon className="h-4 w-4" />
                             <span className="hidden sm:inline">Add New</span>
@@ -528,7 +536,15 @@ export default function StudentIndex() {
                         ) : (
                             <TableRow>
                                 <TableCell colSpan={columns.length} className="py-8 text-center text-gray-500">
-                                    No students found. Add some students to get started.
+                                    <Empty>
+                                        <EmptyHeader>
+                                            <EmptyMedia variant="icon">
+                                                <Users />
+                                            </EmptyMedia>
+                                            <EmptyTitle>No Student</EmptyTitle>
+                                            <EmptyDescription>No data found</EmptyDescription>
+                                        </EmptyHeader>
+                                    </Empty>
                                 </TableCell>
                             </TableRow>
                         )}
@@ -674,26 +690,26 @@ export default function StudentIndex() {
                     <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-0">
                         <div className='space-x-2'>
                             <Button
-                            type="button"
-                            variant="outline"
-                            onClick={() => setShowDeleteModal(false)}
-                            disabled={deleteLoading}
-                            className="w-full sm:w-auto"
-                        >
-                            Cancel
-                        </Button>
-                        <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleteLoading} className="w-full sm:w-auto">
-                            {deleteLoading ? (
-                                <>
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                    Deleting...
-                                </>
-                            ) : (
-                                'Delete'
-                            )}
-                        </Button>
+                                type="button"
+                                variant="outline"
+                                onClick={() => setShowDeleteModal(false)}
+                                disabled={deleteLoading}
+                                className="w-full sm:w-auto"
+                            >
+                                Cancel
+                            </Button>
+                            <Button type="button" variant="destructive" onClick={handleDelete} disabled={deleteLoading} className="w-full sm:w-auto">
+                                {deleteLoading ? (
+                                    <>
+                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                        Deleting...
+                                    </>
+                                ) : (
+                                    'Delete'
+                                )}
+                            </Button>
                         </div>
-                        
+
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

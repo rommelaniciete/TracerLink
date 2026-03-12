@@ -20,8 +20,16 @@ import {
     useReactTable,
     VisibilityState,
 } from '@tanstack/react-table';
+import {
+    Empty,
+    EmptyContent,
+    EmptyDescription,
+    EmptyHeader,
+    EmptyMedia,
+    EmptyTitle,
+} from "@/components/ui/empty"
 import axios from 'axios';
-import { DownloadIcon, FileUp, FilterIcon, MoreVertical, PlusIcon, Trash2Icon, Upload } from 'lucide-react';
+import { DownloadIcon, FileUp, FilterIcon, MoreVertical, PlusIcon, Trash2Icon, Upload, Users } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 import { AlumniForm } from './AlumniForm';
@@ -417,7 +425,7 @@ export function AlumniTable() {
                             </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => setViewingAlumni(alumni)}>View details</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setViewingAlumni(alumni)}>View more details</DropdownMenuItem>
                             <DropdownMenuItem
                                 className="text-red-600 hover:text-red-500"
                                 onClick={() => openDeleteConfirm(alumni)}
@@ -508,6 +516,11 @@ export function AlumniTable() {
 
     return (
         <div className="w-full">
+
+            <div className="mb-6">
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground">Alumni List</h1>
+                <p className="mt-1 text-sm text-muted-foreground">List of all registered alumni records.</p>
+            </div>
             {/* Filters and Actions */}
             <div className="flex flex-col gap-4 py-4">
                 <div className="flex items-center gap-3">
@@ -683,8 +696,9 @@ export function AlumniTable() {
 
                         <div className="flex gap-2">
                             <Button size="sm"
+                                variant="outline"
                                 onClick={() => setShowAddModal(true)}
-                                className="flex items-center gap-2 border-2 border-dashed border-primary bg-transparent text-primary hover:bg-primary/20"
+                                className="flex items-center gap-2 text-primary hover:bg-primary/20"
                             >
                                 <PlusIcon className="h-4 w-4" />
                                 Add New
@@ -981,9 +995,8 @@ export function AlumniTable() {
                                     {headerGroup.headers.map((header) => (
                                         <TableHead
                                             key={header.id}
-                                            className={`font-semibold ${
-                                                header.column.id === 'select' ? 'w-10 px-2' : header.column.id === 'actions' ? 'w-16 px-2' : ''
-                                            }`}
+                                            className={`font-semibold ${header.column.id === 'select' ? 'w-10 px-2' : header.column.id === 'actions' ? 'w-16 px-2' : ''
+                                                }`}
                                         >
                                             {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                                         </TableHead>
@@ -1003,8 +1016,8 @@ export function AlumniTable() {
                                                     cell.column.id === 'select'
                                                         ? 'w-10 px-2 align-top'
                                                         : cell.column.id === 'actions'
-                                                          ? 'w-16 px-2 align-top'
-                                                          : 'max-w-[220px] truncate align-top'
+                                                            ? 'w-16 px-2 align-top'
+                                                            : 'max-w-[220px] truncate align-top'
                                                 }
                                             >
                                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -1015,7 +1028,15 @@ export function AlumniTable() {
                             ) : (
                                 <TableRow>
                                     <TableCell colSpan={columns.length} className="h-24 text-center">
-                                        No results found.
+                                        <Empty>
+                                            <EmptyHeader>
+                                                <EmptyMedia variant="icon">
+                                                    <Users />
+                                                </EmptyMedia>
+                                                <EmptyTitle>No Alumni</EmptyTitle>
+                                                <EmptyDescription>No data found</EmptyDescription>
+                                            </EmptyHeader>
+                                        </Empty>
                                     </TableCell>
                                 </TableRow>
                             )}
@@ -1043,4 +1064,3 @@ export function AlumniTable() {
         </div>
     );
 }
-

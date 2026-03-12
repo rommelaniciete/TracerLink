@@ -12,12 +12,20 @@ import axios from 'axios';
 import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import { Label } from './ui/label';
-import { FilePenLine, Trash, Trash2, Eye, Calendar, Send, Filter, ChevronLeft, ChevronRight, PlusIcon, MapPin, LinkIcon, Loader2 } from 'lucide-react';
+import { FilePenLine, Trash, Trash2, Eye, Send, Filter, ChevronLeft, ChevronRight, PlusIcon, MapPin, LinkIcon, Loader2, BriefcaseBusiness } from 'lucide-react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { format, parseISO, isValid } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import InputError from '@/components/input-error';
+import {
+    Empty,
+    EmptyDescription,
+    EmptyHeader,
+    EmptyMedia,
+    EmptyTitle,
+} from "@/components/ui/empty"
 
 // Types
 interface Job {
@@ -33,8 +41,6 @@ interface Job {
     status: 'active' | 'inactive';
     posted_date: string;
     application_deadline: string;
-    start_date: string;
-    end_date?: string;
 }
 
 interface Program {
@@ -42,12 +48,13 @@ interface Program {
     name: string;
 }
 
+type FilterStatus = 'all' | 'active' | 'inactive';
+
 interface PageProps extends InertiaPageProps {
     jobs?: Job[];
     programs?: Program[];
     filters?: {
         start_date?: string;
-        end_date?: string;
         status?: string;
         show_expired?: boolean;
         show_active?: boolean;
@@ -67,8 +74,7 @@ export default function JobPost() {
     const [dateFilterOpen, setDateFilterOpen] = useState(false);
     const [dateFilter, setDateFilter] = useState({
         start_date: filters.start_date || '',
-        end_date: filters.end_date || '',
-        status: filters.status || '',
+        status: (filters.status === 'active' || filters.status === 'inactive' ? filters.status : 'all') as FilterStatus,
         show_expired: filters.show_expired || false,
         show_active: filters.show_active || false,
         show_upcoming: filters.show_upcoming || false,
@@ -101,6 +107,7 @@ export default function JobPost() {
     const startIndex = (currentPage - 1) * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
     const currentJobs = jobs.slice(startIndex, endIndex);
+    const allCurrentPageSelected = currentJobs.length > 0 && currentJobs.every((job) => selectedJobs.includes(job.id));
 
     // Pagination controls
     const goToPage = (page: number) => {
@@ -125,8 +132,19 @@ export default function JobPost() {
         );
     };
 
+    const toggleSelectAllCurrentPage = () => {
+        const currentPageIds = currentJobs.map((job) => job.id);
+
+        if (allCurrentPageSelected) {
+            setSelectedJobs((prev) => prev.filter((id) => !currentPageIds.includes(id)));
+            return;
+        }
+
+        setSelectedJobs((prev) => Array.from(new Set([...prev, ...currentPageIds])));
+    };
+
     // Bulk delete
-    const handleBulkDelete = () => {
+    const handleBulkDelete = async () => {
         if (selectedJobs.length === 0) {
             toast.error('No jobs selected');
             return;
@@ -134,24 +152,26 @@ export default function JobPost() {
 
         setIsBulkDeleting(true);
 
-        // Create promises for all delete operations
-        const deletePromises = selectedJobs.map(id =>
-            destroy(route('job-posts.destroy', { job_post: id }))
-        );
+        try {
+            await Promise.all(
+                selectedJobs.map((id) =>
+                    axios.delete(route('job-posts.destroy', { job_post: id }))
+                )
+            );
 
-        // Wait for all delete operations to complete
-        Promise.all(deletePromises)
-            .then(() => {
-                toast.success(`${selectedJobs.length} job(s) deleted successfully`);
-                setSelectedJobs([]);
-                setShowBulkDeleteModal(false);
-            })
-            .catch(() => {
-                toast.error('Failed to delete some jobs');
-            })
-            .finally(() => {
-                setIsBulkDeleting(false);
+            toast.success(`${selectedJobs.length} job(s) deleted successfully`);
+            setSelectedJobs([]);
+            setShowBulkDeleteModal(false);
+
+            get(route('job-posts.index'), {
+                preserveState: true,
+                preserveScroll: true,
             });
+        } catch {
+            toast.error('Failed to delete some jobs');
+        } finally {
+            setIsBulkDeleting(false);
+        }
     };
 
     const {
@@ -163,6 +183,8 @@ export default function JobPost() {
         processing,
         reset,
         get,
+        errors,
+        clearErrors,
     } = useForm({
         title: '',
         description: '',
@@ -175,7 +197,6 @@ export default function JobPost() {
         status: 'active' as 'active' | 'inactive',
         posted_date: '',
         application_deadline: '',
-        start_date: '',
     });
 
     // Clear the other location field when switching input types
@@ -185,20 +206,41 @@ export default function JobPost() {
         } else {
             setData('location', '');
         }
-    }, [locationInputType]);
+    }, [locationInputType, setData]);
+
+    useEffect(() => {
+        setSelectedJobs((prev) => prev.filter((id) => jobs.some((job) => job.id === id)));
+    }, [jobs]);
+
+    useEffect(() => {
+        if (totalPages === 0 && currentPage !== 1) {
+            setCurrentPage(1);
+            return;
+        }
+
+        if (totalPages > 0 && currentPage > totalPages) {
+            setCurrentPage(totalPages);
+        }
+    }, [currentPage, totalPages]);
 
     // Apply date filters
     const applyFilters = () => {
+        const params: Record<string, string | boolean> = {};
+
+        if (dateFilter.start_date) {
+            params.start_date = dateFilter.start_date;
+            params.end_date = dateFilter.start_date;
+        }
+        if (dateFilter.status !== 'all') params.status = dateFilter.status;
+        if (dateFilter.show_expired) params.show_expired = true;
+        if (dateFilter.show_active) params.show_active = true;
+        if (dateFilter.show_upcoming) params.show_upcoming = true;
+
         setIsApplyingFilters(true);
-        get(route('job-posts.index', {
-            start_date: dateFilter.start_date,
-            end_date: dateFilter.end_date,
-            status: dateFilter.status,
-            show_expired: dateFilter.show_expired,
-            show_active: dateFilter.show_active,
-            show_upcoming: dateFilter.show_upcoming,
-        }), {
+        get(route('job-posts.index', params), {
             preserveState: true,
+            preserveScroll: true,
+            replace: true,
             onFinish: () => {
                 setIsApplyingFilters(false);
                 setDateFilterOpen(false);
@@ -211,8 +253,7 @@ export default function JobPost() {
     const clearFilters = () => {
         setDateFilter({
             start_date: '',
-            end_date: '',
-            status: '',
+            status: 'all',
             show_expired: false,
             show_active: false,
             show_upcoming: false,
@@ -220,6 +261,8 @@ export default function JobPost() {
         setIsApplyingFilters(true);
         get(route('job-posts.index'), {
             preserveState: true,
+            preserveScroll: true,
+            replace: true,
             onFinish: () => {
                 setIsApplyingFilters(false);
                 setDateFilterOpen(false);
@@ -231,6 +274,8 @@ export default function JobPost() {
     // Open add modal
     const openAdd = () => {
         reset();
+        clearErrors();
+        setData('posted_date', new Date().toISOString().slice(0, 10));
         setEditId(null);
         setLocationInputType('text');
         setOpen(true);
@@ -238,6 +283,7 @@ export default function JobPost() {
 
     // Open edit modal
     const openEdit = (job: Job) => {
+        clearErrors();
         setData({
             title: job.title,
             description: job.description,
@@ -250,7 +296,6 @@ export default function JobPost() {
             status: job.status || 'active',
             posted_date: job.posted_date || '',
             application_deadline: job.application_deadline || '',
-            start_date: job.start_date || '',
         });
 
         // Set the appropriate input type based on existing data
@@ -273,17 +318,6 @@ export default function JobPost() {
     // Handle form submit
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-
-        // Validate date range
-        if (data.application_deadline && data.posted_date && new Date(data.application_deadline) < new Date(data.posted_date)) {
-            toast.error('Application deadline must be after posted date');
-            return;
-        }
-
-        if (data.start_date && data.posted_date && new Date(data.start_date) < new Date(data.posted_date)) {
-            toast.error('Start date must be after posted date');
-            return;
-        }
 
         if (editId) {
             put(route('job-posts.update', { job_post: editId }), {
@@ -321,10 +355,10 @@ export default function JobPost() {
         });
     };
 
-    // Send email to unemployed alumni by program
+    // Send email to unemployed alumni by selected program
     const sendEmail = () => {
         if (!selectedProgram) {
-            toast.error('Please select a program before sending.');
+            toast.error('Please select a program first.');
             return;
         }
 
@@ -342,7 +376,7 @@ export default function JobPost() {
                 setEmailJobId(null);
             })
             .catch(() => {
-                toast.error('No Unemployed found in this program');
+                toast.error('No unemployed alumni found for the selected program.');
                 setShowEmailModal(false);
                 setEmailJobId(null);
             })
@@ -425,16 +459,6 @@ export default function JobPost() {
         return new Date() > deadline;
     };
 
-    // Check if job is upcoming based on start date
-    const isJobUpcoming = (job: Job) => {
-        if (!job.start_date) return false;
-
-        const startDate = parseDateString(job.start_date);
-        if (!startDate || !isValid(startDate)) return false;
-
-        return new Date() < startDate;
-    };
-
     // Extract coordinates from Google Maps link
     const extractCoordinatesFromLink = (link: string) => {
         try {
@@ -466,53 +490,47 @@ export default function JobPost() {
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-2xl font-bold tracking-tight">Job Post Management</h1>
-                    <p className="text-muted-foreground">Create and manage job postings for alumni</p>
+                    <h1 className="text-2xl font-semibold tracking-tight text-foreground">Job Post Management</h1>
+                    <p className="mt-1 text-sm text-muted-foreground">Create and manage job postings for alumni</p>
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2">
-                    <Button size="sm" onClick={openAdd} className="sm:w-auto  border-2 border-dashed border-primary bg-transparent text-primary hover:bg-primary/20">
+                    <Button variant="outline" size="sm" onClick={openAdd} className="sm:w-auto  text-primary hover:bg-primary/20">
                         <PlusIcon className="mr-2 h-4 w-4 " /> Add Job Post
                     </Button>
 
                     <Popover open={dateFilterOpen} onOpenChange={setDateFilterOpen}>
                         <PopoverTrigger asChild>
-
+                            <Button variant="outline" size="sm" className="sm:w-auto">
+                                <Filter className="mr-2 h-4 w-4" />
+                                Filter Jobs
+                            </Button>
                         </PopoverTrigger>
                         <PopoverContent className="w-80">
                             <div className="space-y-4">
                                 <h4 className="font-medium">Filter Jobs</h4>
 
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div className="space-y-2">
-                                        <Label className="text-xs">Start Date</Label>
-                                        <Input
-                                            type="date"
-                                            value={dateFilter.start_date}
-                                            onChange={(e) => setDateFilter({ ...dateFilter, start_date: e.target.value })}
-                                        />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <Label className="text-xs">End Date</Label>
-                                        <Input
-                                            type="date"
-                                            value={dateFilter.end_date}
-                                            onChange={(e) => setDateFilter({ ...dateFilter, end_date: e.target.value })}
-                                        />
-                                    </div>
+                                <div className="space-y-2">
+                                    <Label className="text-xs">Start Date</Label>
+                                    <Input
+                                        type="date"
+                                        value={dateFilter.start_date}
+                                        onChange={(e) => setDateFilter({ ...dateFilter, start_date: e.target.value })}
+                                    />
+                                    <p className="text-xs text-muted-foreground">Uses one date only.</p>
                                 </div>
 
                                 <div className="space-y-2">
                                     <Label className="text-xs">Status</Label>
                                     <Select
                                         value={dateFilter.status}
-                                        onValueChange={(val) => setDateFilter({ ...dateFilter, status: val })}
+                                        onValueChange={(val) => setDateFilter({ ...dateFilter, status: val as FilterStatus })}
                                     >
                                         <SelectTrigger>
                                             <SelectValue placeholder="All statuses" />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="">All Statuses</SelectItem>
+                                            <SelectItem value="all">All Statuses</SelectItem>
                                             <SelectItem value="active">Active</SelectItem>
                                             <SelectItem value="inactive">Inactive</SelectItem>
                                         </SelectContent>
@@ -523,7 +541,7 @@ export default function JobPost() {
                                     <Label className="text-xs">Quick Filters</Label>
                                     <div className="flex flex-col gap-2">
                                         <div className="flex items-center gap-2">
-                                            <Input
+                                            <input
                                                 type="checkbox"
                                                 id="show_active"
                                                 checked={dateFilter.show_active}
@@ -533,7 +551,7 @@ export default function JobPost() {
                                             <Label htmlFor="show_active" className="text-sm">Show Active Only</Label>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <Input
+                                            <input
                                                 type="checkbox"
                                                 id="show_expired"
                                                 checked={dateFilter.show_expired}
@@ -543,7 +561,7 @@ export default function JobPost() {
                                             <Label htmlFor="show_expired" className="text-sm">Show Expired</Label>
                                         </div>
                                         <div className="flex items-center gap-2">
-                                            <Input
+                                            <input
                                                 type="checkbox"
                                                 id="show_upcoming"
                                                 checked={dateFilter.show_upcoming}
@@ -573,7 +591,13 @@ export default function JobPost() {
             </div>
 
             {/* Add/Edit Modal */}
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog
+                open={open}
+                onOpenChange={(nextOpen) => {
+                    setOpen(nextOpen);
+                    if (!nextOpen) clearErrors();
+                }}
+            >
                 <DialogContent className="sm:max-w-[600px] md:max-w-[700px] lg:max-w-[800px] max-h-[90vh] overflow-y-auto p-4 sm:p-6">
                     <DialogHeader className="px-2 sm:px-0">
                         <DialogTitle className="text-lg sm:text-xl">
@@ -595,6 +619,7 @@ export default function JobPost() {
                                     required
                                     className="w-full"
                                 />
+                                <InputError message={errors.title} />
                             </div>
 
                             <div className="space-y-2">
@@ -606,6 +631,7 @@ export default function JobPost() {
                                     required
                                     className="w-full"
                                 />
+                                <InputError message={errors.company_name} />
                             </div>
                         </div>
 
@@ -619,6 +645,39 @@ export default function JobPost() {
                                 rows={4}
                                 className="w-full min-h-[120px]"
                             />
+                            <InputError message={errors.description} />
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                            <div className="space-y-2">
+                                <Label className="text-sm sm:text-base">Application Deadline *</Label>
+                                <Input
+                                    type="date"
+                                    value={data.application_deadline}
+                                    onChange={(e) => setData('application_deadline', e.target.value)}
+                                    className="w-full"
+                                    required
+                                />
+                                <p className="text-xs text-muted-foreground">Deadline for applications.</p>
+                                <InputError message={errors.application_deadline} />
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className="text-sm sm:text-base block font-medium">Status *</Label>
+                                <Select
+                                    value={data.status}
+                                    onValueChange={(val: 'active' | 'inactive') => setData('status', val)}
+                                >
+                                    <SelectTrigger className="w-full">
+                                        <SelectValue placeholder="Select Status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="active">Active</SelectItem>
+                                        <SelectItem value="inactive">Inactive</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <InputError message={errors.status} />
+                            </div>
                         </div>
 
                         {/* Location Input */}
@@ -642,7 +701,7 @@ export default function JobPost() {
 
                                 <TabsContent value="text" className="space-y-1">
                                     <Input
-                                        placeholder="Enter location (e.g., 'New York, NY' or '123 Main St')"
+                                        placeholder="Enter location manually (e.g., pamsu, sta. catalina, lubao, pamp.. )"
                                         value={data.location}
                                         onChange={(e) => setData('location', e.target.value)}
                                         className="w-full"
@@ -650,29 +709,21 @@ export default function JobPost() {
                                     <p className="text-xs text-muted-foreground">
                                         Enter the physical location of the job
                                     </p>
+                                    <InputError message={errors.location} />
                                 </TabsContent>
 
                                 <TabsContent value="link" className="space-y-1">
                                     <Input
+                                        type="url"
                                         placeholder="Paste Google Maps link (e.g., https://goo.gl/maps/...)"
                                         value={data.location_link}
                                         onChange={(e) => setData('location_link', e.target.value)}
                                         className="w-full"
                                     />
                                     <p className="text-xs text-muted-foreground">
-                                        Paste a Google Maps link to provide precise location
+                                        Use a full URL (for example, https://maps.google.com/...).
                                     </p>
-                                    {/* {data.location_link && extractCoordinatesFromLink(data.location_link) && (
-              <div className="text-xs text-green-600 flex items-center">
-                <MapPin className="h-3 w-3 mr-1" />
-                Valid Google Maps link detected
-              </div>
-            )}
-            {data.location_link && extractCoordinatesFromLink(data.location_link) && (
-              <div className="text-xs text-amber-600">
-                This doesn't appear to be a valid Google Maps link
-              </div>
-            )} */}
+                                    <InputError message={errors.location_link} />
                                 </TabsContent>
                             </Tabs>
                         </div>
@@ -687,6 +738,7 @@ export default function JobPost() {
                                     rows={3}
                                     className="w-full min-h-[100px]"
                                 />
+                                <InputError message={errors.requirements} />
                             </div>
 
                             <div className="space-y-2">
@@ -698,71 +750,21 @@ export default function JobPost() {
                                     rows={3}
                                     className="w-full min-h-[100px]"
                                 />
+                                <InputError message={errors.responsibilities} />
                             </div>
                         </div>
 
                         <div className="space-y-2">
-                            <Label className="text-sm sm:text-base">Apply Link</Label>
+                            <Label className="text-sm sm:text-base">Apply Link <span className='text-sm text-muted-foreground'>(Optional if company doesn't have link )</span></Label>
                             <Input
+                                type="url"
                                 placeholder="Apply Link"
                                 value={data.apply_link}
                                 onChange={(e) => setData('apply_link', e.target.value)}
                                 className="w-full"
                             />
-                        </div>
-
-                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                            <div className="space-y-2">
-                                <Label className="text-sm sm:text-base">Posted Date</Label>
-                                <Input
-                                    type="date"
-                                    value={data.posted_date}
-                                    onChange={(e) => setData('posted_date', e.target.value)}
-                                    className="w-full"
-                                />
-                                <p className="text-xs text-muted-foreground">When job was posted</p>
-                            </div>
-                            <div className="space-y-2">
-                                <Label className="text-sm sm:text-base">Application Deadline</Label>
-                                <Input
-                                    type="date"
-                                    value={data.application_deadline}
-                                    onChange={(e) => setData('application_deadline', e.target.value)}
-                                    min={data.posted_date || undefined}
-                                    className="w-full"
-                                />
-                                <p className="text-xs text-muted-foreground">Deadline for applications</p>
-                            </div>
-
-                            {/* <div className="space-y-2">
-          <Label className="text-sm sm:text-base">Job Start Date</Label>
-          <Input 
-            type="date" 
-            value={data.start_date} 
-            onChange={(e) => setData('start_date', e.target.value)} 
-            min={data.posted_date || undefined}
-            className="w-full"
-          />
-          <p className="text-xs text-muted-foreground">When job starts</p>
-        </div>
-         */}
-
-                        </div>
-
-                        <div className="space-y-2">
-                            <Label className="text-sm sm:text-base block font-medium">Status</Label>
-                            <Select
-                                value={data.status}
-                                onValueChange={(val: 'active' | 'inactive') => setData('status', val)}
-                            >
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="active">Active</SelectItem>
-                                    <SelectItem value="inactive">Inactive</SelectItem>
-                                </SelectContent>
-                            </Select>
+                            <p className="text-xs text-muted-foreground">Use a full URL (for example, https://company.com/jobs).</p>
+                            <InputError message={errors.apply_link} />
                         </div>
 
                         <DialogFooter className="flex flex-col sm:flex-row gap-2 sm:gap-0 mt-6 px-2 sm:px-0">
@@ -858,17 +860,7 @@ export default function JobPost() {
                                 )}
                             </div>
 
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-
-                                <div>
-                                    <Label className="font-semibold">Start Date</Label>
-                                    <p>{formatDate(viewJob.posted_date)}</p>
-                                    {isJobUpcoming(viewJob) && (
-                                        <span className="text-xs text-blue-500">(Upcoming)</span>
-                                    )}
-                                </div>
-
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                     <Label className="font-semibold">Application Deadline</Label>
                                     <p>{formatDate(viewJob.application_deadline)}</p>
@@ -888,7 +880,6 @@ export default function JobPost() {
                                     }>
                                         {isJobActive(viewJob) ? 'ACTIVE' : 'INACTIVE'}
                                         {isJobExpired(viewJob) && ' (EXPIRED)'}
-                                        {isJobUpcoming(viewJob) && ' (UPCOMING)'}
                                     </Badge>
                                 </div>
                             </div>
@@ -1002,7 +993,7 @@ export default function JobPost() {
                             {isSendingToAllEmployed ? (
                                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                             ) : null}
-                            Send to All Employed
+                            Send to All Unemployed
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -1013,29 +1004,37 @@ export default function JobPost() {
                 <CardHeader className="pb-3">
                     <CardTitle>Email Settings</CardTitle>
                     <CardDescription>
-                        Select a program to send job postings to unemployed alumni
+                        Choose which program should receive unemployed job alerts
                     </CardDescription>
                 </CardHeader>
                 <CardContent>
                     <div className="flex flex-col sm:flex-row sm:items-end gap-4">
                         <div className="flex-1">
-                            <Label className="mb-1 block font-medium">Which Program Alumni Should Receive This Job?</Label>
+                            <Label className="mb-1 block font-medium">Program Target</Label>
                             <Select
-                                value={selectedProgram.toString()}
+                                value={selectedProgram ? selectedProgram.toString() : ''}
                                 onValueChange={(val) => setSelectedProgram(val ? Number(val) : '')}
                             >
                                 <SelectTrigger className="w-full lg:max-w-sm">
                                     <SelectValue placeholder="Select a program" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    {programs.map((prog) => (
-                                        <SelectItem key={prog.id} value={prog.id.toString()}>
-                                            {prog.name}
+                                    {programs.map((program) => (
+                                        <SelectItem key={program.id} value={program.id.toString()}>
+                                            {program.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                Row-level Send uses this selected program.
+                            </p>
                         </div>
+
+                        <Button variant="outline" onClick={() => setShowAllEmployedModal(true)} className="sm:w-auto">
+                            <Send className="mr-2 h-4 w-4" />
+                            Send to All Employed
+                        </Button>
 
                         {selectedJobs.length > 0 && (
                             <Button variant="destructive" onClick={() => setShowBulkDeleteModal(true)} className="sm:w-auto">
@@ -1060,16 +1059,13 @@ export default function JobPost() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead className="w-12">
-                                    {/* <Input
-                                            type="checkbox"
-                                            className="w-4 h-4"
-                                            checked={selectedJobs.length === jobs.length && jobs.length > 0}
-                                            onChange={() =>
-                                                setSelectedJobs(
-                                                    selectedJobs.length === jobs.length ? [] : jobs.map((j) => j.id)
-                                                )
-                                            }
-                                        /> */}
+                                    <input
+                                        type="checkbox"
+                                        className="h-4 w-4"
+                                        checked={allCurrentPageSelected}
+                                        onChange={toggleSelectAllCurrentPage}
+                                        aria-label="Select all jobs on current page"
+                                    />
                                 </TableHead>
                                 <TableHead>Title</TableHead>
                                 <TableHead>Company</TableHead>
@@ -1083,24 +1079,32 @@ export default function JobPost() {
                             {currentJobs.length === 0 ? (
                                 <TableRow>
                                     <TableCell colSpan={7} className="text-center h-24">
-                                        No job posts found.
+                                        <Empty>
+                                            <EmptyHeader>
+                                                <EmptyMedia variant="icon">
+                                                    <BriefcaseBusiness />
+                                                </EmptyMedia>
+                                                <EmptyTitle>No Jobs</EmptyTitle>
+                                                <EmptyDescription>No data found</EmptyDescription>
+                                            </EmptyHeader>
+                                        </Empty>
                                     </TableCell>
                                 </TableRow>
                             ) : (
                                 currentJobs.map((job) => {
                                     const isActive = isJobActive(job);
                                     const isExpired = isJobExpired(job);
-                                    const isUpcoming = isJobUpcoming(job);
 
                                     return (
                                         <TableRow key={job.id} className={!isActive ? 'opacity-70 bg-muted/30' : ''}>
                                             <TableCell>
-                                                {/* <Input
+                                                <input
                                                     type="checkbox"
                                                     checked={selectedJobs.includes(job.id)}
                                                     onChange={() => toggleSelectJob(job.id)}
-                                                    className="w-4 h-4"
-                                                /> */}
+                                                    className="h-4 w-4"
+                                                    aria-label={`Select ${job.title}`}
+                                                />
                                             </TableCell>
                                             <TableCell className="font-medium">{job.title}</TableCell>
                                             <TableCell>{job.company_name}</TableCell>
@@ -1126,8 +1130,8 @@ export default function JobPost() {
                                                     {isExpired && (
                                                         <span className="text-xs text-red-500">Expired</span>
                                                     )}
-                                                    {isUpcoming && (
-                                                        <span className="text-xs text-blue-500">Upcoming</span>
+                                                    {!isExpired && (
+                                                        <span className="text-xs text-emerald-600">Open for applications</span>
                                                     )}
                                                 </div>
                                             </TableCell>
@@ -1139,7 +1143,6 @@ export default function JobPost() {
                                                 }>
                                                     {isActive ? 'ACTIVE' : 'INACTIVE'}
                                                     {isExpired && ' (EXPIRED)'}
-                                                    {isUpcoming && ' (UPCOMING)'}
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-right">
@@ -1168,7 +1171,7 @@ export default function JobPost() {
                                                         className="gap-1"
                                                     >
                                                         <Send className="h-3 w-3" />
-                                                        Send
+                                                        Send to Unemployed
                                                     </Button>
                                                 </div>
                                             </TableCell>

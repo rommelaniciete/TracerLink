@@ -128,7 +128,7 @@ export default function UpdateForm() {
   return (
     <div className="max-w-4xl mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold">Update Your Alumni Information</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Update Your Alumni Information</h1>
         <Button variant="ghost" size="icon" onClick={() => window.close()}>
           <X className="h-4 w-4" />
         </Button>

@@ -77,14 +77,14 @@ export default function Data() {
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Analytics Dashboard" />
 
-      <div className="min-h-screen bg-gray-50 dark:bg-zinc-950 p-6">
+      <div className="space-y-6 p-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
-            <h1 className=" font-bold text-gray-900 dark:text-white">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               Alumni Analytics
             </h1>
-            <p className="text-gray-600 dark:text-gray-400 mt-2">
+            <p className="mt-1 text-sm text-muted-foreground">
               Explore responses data with interactive filters and visualizations
             </p>
           </div>

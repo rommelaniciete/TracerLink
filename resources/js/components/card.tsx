@@ -20,10 +20,10 @@ export function SectionCards({ programs = [] }: { programs: Program[] }) {
     const extraPrograms = programs.slice(MAX_VISIBLE_PROGRAM_CARDS);
 
     return (
-        <div className="w-full bg-gray-50 px-1 py-6 dark:bg-zinc-950">
+        <div className="w-full">
             <div className="mb-6">
-                <h1 className="font-semibold text-gray-800 dark:text-gray-200">Program Statistics</h1>
-                <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">Overview of response metrics across all programs</p>
+                <h1 className="text-2xl font-semibold tracking-tight text-foreground">Program Statistics</h1>
+                <p className="mt-1 text-sm text-muted-foreground">Overview of response metrics across all programs</p>
             </div>
 
             <div className="grid items-stretch gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -81,11 +81,11 @@ export function SectionCards({ programs = [] }: { programs: Program[] }) {
                         <div>
                             <CardTitle className="text-base text-gray-900 dark:text-white">More Programs</CardTitle>
                             <CardDescription className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                                {extraPrograms.length} more programs are hidden to keep the dashboard clean.
+                                {extraPrograms.length} more programs are hidden, to see click the <span className='font-bold'>"Show more" </span>button.
                             </CardDescription>
                         </div>
                         <Button type="button" variant="outline" onClick={() => setShowExtraPrograms((prev) => !prev)}>
-                            {showExtraPrograms ? 'Hide' : 'Show all'}
+                            {showExtraPrograms ? 'Hide' : 'Show more'}
                         </Button>
                     </CardHeader>
                     {showExtraPrograms && (

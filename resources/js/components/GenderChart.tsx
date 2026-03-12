@@ -17,7 +17,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Users, Venus, Mars, HelpCircle } from 'lucide-react';
+import { Users, Venus, Mars, HelpCircle, GridIcon, VenusAndMars } from 'lucide-react';
 
 type ChartItem = {
   sex: string;
@@ -36,7 +36,15 @@ const GENDER_ICONS: Record<string, React.ElementType> = {
   female: Venus,
   unknown: HelpCircle
 };
-
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import { Button } from './ui/button';
 export default function GenderChart() {
   const [data, setData] = useState<ChartItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,7 +80,7 @@ export default function GenderChart() {
 
   const renderLegend = (props: any) => {
     const { payload } = props;
-    
+
     return (
       <div className="mt-4 px-2">
         <div className="grid grid-cols-1 gap-2">
@@ -80,18 +88,17 @@ export default function GenderChart() {
             const percent = total > 0 ? ((entry.payload.count / total) * 100).toFixed(1) : '0';
             const isMaxValue = entry.payload.count === maxValue;
             const IconComponent = GENDER_ICONS[entry.value.toLowerCase().replace(' ', '')] || Users;
-            
+
             return (
-              <div 
-                key={`legend-${index}`} 
-                className={`flex items-center justify-between p-3 rounded-lg ${
-                  isMaxValue ? 'shadow-sm bg-green-500/10 font-medium' : ''
-                }`}
+              <div
+                key={`legend-${index}`}
+                className={`flex items-center justify-between p-3 rounded-lg ${isMaxValue ? 'shadow-sm bg-green-500/10 font-medium' : ''
+                  }`}
               >
                 <div className="flex items-center gap-3">
                   <div className="flex items-center gap-2">
                     <IconComponent className="h-4 w-4" style={{ color: entry.color }} />
-                    <div 
+                    <div
                       className="w-3 h-3 rounded-full flex-shrink-0"
                       style={{ backgroundColor: entry.color }}
                     />
@@ -112,7 +119,7 @@ export default function GenderChart() {
             );
           })}
         </div>
-        
+
         {total > 0 && (
           <div className="mt-3 pt-3 border-t border-gray-200">
             <div className="flex justify-between items-center">
@@ -133,7 +140,7 @@ export default function GenderChart() {
             <CardTitle className="text-lg font-semibold">Gender Distribution</CardTitle>
             <CardDescription className="text-sm text-muted-foreground">
               Demographic breakdown of alumni population
-                <div className="text-muted-foreground whitespace-nowrap">Data updated {new Date().toLocaleDateString()}</div>
+              <div className="text-muted-foreground whitespace-nowrap">Data updated {new Date().toLocaleDateString()}</div>
             </CardDescription>
           </div>
           {/* <div className="p-2 rounded-full bg-pink-100">
@@ -141,7 +148,7 @@ export default function GenderChart() {
           </div> */}
         </div>
       </CardHeader>
-      
+
       <CardContent>
         {isLoading ? (
           <div className="flex h-64 items-center justify-center">
@@ -153,7 +160,15 @@ export default function GenderChart() {
           </div>
         ) : data.length === 0 ? (
           <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-            No gender data available
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <VenusAndMars />
+                </EmptyMedia>
+                <EmptyTitle>No Gender</EmptyTitle>
+                <EmptyDescription>No data found</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           </div>
         ) : (
           <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6">
@@ -195,7 +210,7 @@ export default function GenderChart() {
                       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                     }}
                     labelFormatter={(name) => `Gender: ${name}`}
-                    labelStyle={{ 
+                    labelStyle={{
                       fontWeight: 600,
                       marginBottom: '4px'
                     }}
@@ -203,18 +218,20 @@ export default function GenderChart() {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            
+
             {/* Legend */}
             <div className="w-full lg:w-1/2">
               <div className="border-s-muted rounded-lg p-4">
                 <h4 className="text-sm font-semibold mb-3 text-center">
                   Demographic Breakdown
                 </h4>
-                {renderLegend({ payload: data.map((item, index) => ({
-                  value: item.sex,
-                  color: item.fill,
-                  payload: item
-                })) })}
+                {renderLegend({
+                  payload: data.map((item, index) => ({
+                    value: item.sex,
+                    color: item.fill,
+                    payload: item
+                  }))
+                })}
               </div>
             </div>
           </div>

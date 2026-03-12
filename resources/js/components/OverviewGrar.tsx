@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import axios from "axios"
-import { TrendingUp, Users, Calendar, ArrowUp, ArrowDown } from "lucide-react"
+import { TrendingUp, Users, Calendar, ArrowUp, ArrowDown, Users2 } from "lucide-react"
 import { CartesianGrid, LabelList, Line, LineChart, XAxis, YAxis, ResponsiveContainer } from "recharts"
 
 import {
@@ -18,6 +18,16 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
+
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import { Button } from "./ui/button"
 
 export const description = "A line chart showing total graduates per year"
 
@@ -36,7 +46,7 @@ const chartConfig = {
 export function GraduatesLineChart() {
   const [data, setData] = useState<ChartItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [trend, setTrend] = useState<{direction: 'up' | 'down' | 'stable', percentage: number}>({direction: 'stable', percentage: 0})
+  const [trend, setTrend] = useState<{ direction: 'up' | 'down' | 'stable', percentage: number }>({ direction: 'stable', percentage: 0 })
 
   useEffect(() => {
     const fetchData = async () => {
@@ -45,13 +55,13 @@ export function GraduatesLineChart() {
         const res = await axios.get("/chart/total-graduates")
         const sortedData = res.data.sort((a: ChartItem, b: ChartItem) => a.year.localeCompare(b.year))
         setData(sortedData)
-        
+
         // Calculate trend
         if (sortedData.length >= 2) {
           const currentYear = sortedData[sortedData.length - 1].total
           const previousYear = sortedData[sortedData.length - 2].total
           const percentageChange = ((currentYear - previousYear) / previousYear) * 100
-          
+
           setTrend({
             direction: percentageChange > 0 ? 'up' : percentageChange < 0 ? 'down' : 'stable',
             percentage: Math.abs(percentageChange)
@@ -79,7 +89,7 @@ export function GraduatesLineChart() {
             <CardTitle className="text-lg font-semibold">Response Trends</CardTitle>
             <CardDescription className="text-sm text-muted-foreground">
               Number of responses by academic year
-                <div className="text-muted-foreground whitespace-nowrap">Data updated {new Date().toLocaleDateString()}</div>
+              <div className="text-muted-foreground whitespace-nowrap">Data updated {new Date().toLocaleDateString()}</div>
             </CardDescription>
           </div>
           {/* <div className="p-2 rounded-full bg-blue-100">
@@ -87,7 +97,7 @@ export function GraduatesLineChart() {
           </div> */}
         </div>
       </CardHeader>
-      
+
       <CardContent>
         {isLoading ? (
           <div className="h-64 flex items-center justify-center">
@@ -99,8 +109,15 @@ export function GraduatesLineChart() {
           </div>
         ) : data.length === 0 ? (
           <div className="h-64 flex flex-col items-center justify-center text-muted-foreground">
-            <Calendar className="h-12 w-12 mb-3 text-gray-300" />
-            <p>No graduation data available</p>
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Users2 />
+                </EmptyMedia>
+                <EmptyTitle>No Response</EmptyTitle>
+                <EmptyDescription>No data found</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           </div>
         ) : (
           <div className="space-y-6">
@@ -152,8 +169,8 @@ export function GraduatesLineChart() {
                     <ChartTooltip
                       cursor={false}
                       content={
-                        <ChartTooltipContent 
-                          indicator="line" 
+                        <ChartTooltipContent
+                          indicator="line"
                           labelFormatter={(value) => `Year: ${value}`}
                           formatter={(value) => [`${value} graduates`, 'Count']}
                         />
@@ -193,13 +210,12 @@ export function GraduatesLineChart() {
             {/* Trend Indicator */}
             {data.length >= 2 && (
               <div className="flex items-center justify-center gap-2 text-sm ">
-                <div className={`flex items-center gap-1 px-3 py-1 rounded-full z-999999 ${
-                  trend.direction === 'up' ? 'bg-green-100 text-green-800' : 
-                  trend.direction === 'down' ? 'bg-red-100 text-red-800' : 
-                  'bg-gray-100 text-gray-800'
-                }`}>
-                  {trend.direction === 'up' ? <ArrowUp className="h-3 w-3" /> : 
-                   trend.direction === 'down' ? <ArrowDown className="h-3 w-3" /> : null}
+                <div className={`flex items-center gap-1 px-3 py-1 rounded-full z-999999 ${trend.direction === 'up' ? 'bg-green-100 text-green-800' :
+                  trend.direction === 'down' ? 'bg-red-100 text-red-800' :
+                    'bg-gray-100 text-gray-800'
+                  }`}>
+                  {trend.direction === 'up' ? <ArrowUp className="h-3 w-3" /> :
+                    trend.direction === 'down' ? <ArrowDown className="h-3 w-3" /> : null}
                   <span className="font-medium  ">
                     {trend.direction === 'up' ? '+' : trend.direction === 'down' ? '-' : ''}
                     {trend.percentage.toFixed(1)}% responses from previous year

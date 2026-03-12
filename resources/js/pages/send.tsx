@@ -15,7 +15,7 @@ export default function SendEmailForm() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Alumni Form" />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-4 overflow-x-auto">
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl overflow-x-auto">
                <StudentIndex/>
             </div>
         </AppLayout>

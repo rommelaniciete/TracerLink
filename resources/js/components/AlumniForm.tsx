@@ -559,8 +559,7 @@ export const AlumniForm = memo(function AlumniForm({
                                 <StarRating
                                     value={data.instruction_rating || 0}
                                     onChange={handleRatingChange}
-                                    disabled={isEditing} // ✅ Disable when editing
-                                    error={errors.instruction_rating}
+                                    disabled={isEditing}
                                 />
                             </FieldWrapper>
                         </div>

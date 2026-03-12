@@ -3,7 +3,14 @@
 import axios from 'axios';
 import { useEffect, useState } from 'react';
 import { Pie, PieChart, ResponsiveContainer, Tooltip, Cell, Legend } from 'recharts';
-
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
 import {
   Card,
   CardContent,
@@ -11,6 +18,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { BriefcaseBusiness } from 'lucide-react';
 
 type ChartDataItem = {
   browser: string;
@@ -24,16 +32,16 @@ type Props = {
 };
 
 const chartConfig = {
-  employed: { 
-    label: 'Employed', 
+  employed: {
+    label: 'Employed',
     color: 'hsl(0 72.2% 50.6%)'   // emerald-500 (#10b981)
   },
-  unemployed: { 
-    label: 'Unemployed', 
+  unemployed: {
+    label: 'Unemployed',
     color: 'hsl(0 70% 35.3%)'     // red-500 (#ef4444)
   },
-  nottracked: { 
-    label: 'Not Tracked', 
+  nottracked: {
+    label: 'Not Tracked',
     color: 'hsl(220, 9.1%, 46.1%)'    // gray-500 (#6b7280)
   },
 } satisfies Record<string, { label: string; color: string }>;
@@ -56,7 +64,7 @@ function ChartPieSkeleton() {
           <div className="w-full lg:w-1/2 h-64 flex items-center justify-center">
             <div className="w-40 h-40 rounded-full bg-muted animate-pulse"></div>
           </div>
-          
+
           {/* Legend Skeleton */}
           <div className="w-full lg:w-1/2">
             <div className="border border-gray-10 rounded-lg p-4">
@@ -137,23 +145,22 @@ export function ChartPieLegend({ programId, year }: Props) {
   // Enhanced legend renderer
   const renderLegend = (props: any) => {
     const { payload } = props;
-    
+
     return (
       <div className="mt-4 px-2">
         <div className="grid grid-cols-1 gap-2">
           {payload.map((entry: any, index: number) => {
             const percent = total > 0 ? ((entry.payload.visitors / total) * 100).toFixed(1) : '0';
             const isMaxValue = entry.payload.visitors === maxValue;
-            
+
             return (
-              <div 
-                key={`legend-${index}`} 
-                className={`flex items-center justify-between p-2 rounded-lg ${
-                  isMaxValue ? 'shadow-sm bg-green-500/10 font-medium' : ''
-                }`}
+              <div
+                key={`legend-${index}`}
+                className={`flex items-center justify-between p-2 rounded-lg ${isMaxValue ? 'shadow-sm bg-green-500/10 font-medium' : ''
+                  }`}
               >
                 <div className="flex items-center gap-3">
-                  <div 
+                  <div
                     className="w-4 h-4 rounded-full flex-shrink-0"
                     style={{ backgroundColor: entry.color }}
                   />
@@ -173,7 +180,7 @@ export function ChartPieLegend({ programId, year }: Props) {
             );
           })}
         </div>
-        
+
         {total > 0 && (
           <div className="mt-3 pt-3 border-t ">
             <div className="flex justify-between items-center">
@@ -197,7 +204,15 @@ export function ChartPieLegend({ programId, year }: Props) {
       <CardContent>
         {chartData.length === 0 ? (
           <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-            No employment data available
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <BriefcaseBusiness/>
+                </EmptyMedia>
+                <EmptyTitle>No Employment</EmptyTitle>
+                <EmptyDescription>No data found</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           </div>
         ) : (
           <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6">
@@ -240,7 +255,7 @@ export function ChartPieLegend({ programId, year }: Props) {
                       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                     }}
                     labelFormatter={(name) => `Status: ${name}`}
-                    labelStyle={{ 
+                    labelStyle={{
                       fontWeight: 600,
                       marginBottom: '4px'
                     }}
@@ -248,18 +263,20 @@ export function ChartPieLegend({ programId, year }: Props) {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            
+
             {/* Legend */}
             <div className="w-full lg:w-1/2">
               <div className="border border-gray-10 rounded-lg p-4 capitalize">
                 <h4 className="text-sm font-semibold mb-3 text-center">
                   Status Breakdown
                 </h4>
-                {renderLegend({ payload: chartData.map((item, index) => ({
-                  value: item.browser,
-                  color: item.fill,
-                  payload: item
-                })) })}
+                {renderLegend({
+                  payload: chartData.map((item, index) => ({
+                    value: item.browser,
+                    color: item.fill,
+                    payload: item
+                  }))
+                })}
               </div>
             </div>
           </div>

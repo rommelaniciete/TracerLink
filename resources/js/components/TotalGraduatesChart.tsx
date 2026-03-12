@@ -20,7 +20,14 @@ import {
   CardContent,
 } from '@/components/ui/card';
 import { TrendingUp, Users, Calendar } from 'lucide-react';
-
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
 type ChartItem = {
   year: string;
   total: number;
@@ -106,8 +113,15 @@ export default function TotalGraduatesChart({ programId, year }: Props) {
           </div>
         ) : data.length === 0 ? (
           <div className="text-center text-muted-foreground py-12">
-            <Calendar className="h-12 w-12 mx-auto text-gray-300 mb-3" />
-            <p>No graduation data available</p>
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Calendar />
+                </EmptyMedia>
+                <EmptyTitle>No Response</EmptyTitle>
+                <EmptyDescription>No data found</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           </div>
         ) : (
           <div className="space-y-4">
@@ -161,7 +175,7 @@ export default function TotalGraduatesChart({ programId, year }: Props) {
                       color: '#111827',
                       fontSize: '13px',
                     }}
-                    labelStyle={{ 
+                    labelStyle={{
                       fontWeight: 600,
                       marginBottom: '4px',
                       color: '#1f2937'

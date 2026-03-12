@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { RefreshCw, Download } from "lucide-react";
+import { RefreshCw, Download, BookA } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -24,7 +24,14 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
-
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
 type AlumniRow = {
   id: number;
   program_id: number;
@@ -103,10 +110,13 @@ export default function EmployabilityPage() {
   };
 
   return (
-    <div className="p-6">
-      <Card className="border-none shadow-sm">
+    <div>
+      <Card>
         <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <CardTitle className="text-xl">Employability Report</CardTitle>
+          <div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Employability Report</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Generate and print a detailed report of alumni employability data.</p>
+          </div>
           <div className="flex flex-col md:flex-row items-start md:items-center gap-2">
             <Input
               value={query}
@@ -172,7 +182,15 @@ export default function EmployabilityPage() {
                 {filtered.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      No results found.
+                      <Empty>
+                        <EmptyHeader>
+                          <EmptyMedia variant="icon">
+                            <BookA />
+                          </EmptyMedia>
+                          <EmptyTitle>No Employability</EmptyTitle>
+                          <EmptyDescription>No data found</EmptyDescription>
+                        </EmptyHeader>
+                      </Empty>
                     </TableCell>
                   </TableRow>
                 )}

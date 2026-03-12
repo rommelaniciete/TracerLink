@@ -7,7 +7,6 @@ export function TestRealtimeComponent() {
 
 if (socket) {
   socket.onopen = () => {
-    console.log('✅ WebSocket connected!');
   };
 
   socket.onerror = (err: any) => {
@@ -24,7 +23,6 @@ if (socket) {
   React.useEffect(() => {
     echo.channel('alumni')
       .listen('.TestRealtime', (e: any) => {
-        console.log('Realtime Event:', e);
         setMessages(prev => [e.message, ...prev]);
       });
 

@@ -17,7 +17,15 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
+import { BookOpen } from 'lucide-react';
 type ChartData = {
   name: string;
   value: number;
@@ -54,7 +62,7 @@ function PursuingStudiesSkeleton() {
           <div className="w-full lg:w-1/2 h-64 flex items-center justify-center">
             <div className="w-40 h-40 rounded-full bg-muted animate-pulse"></div>
           </div>
-          
+
           {/* Legend Skeleton */}
           <div className="w-full lg:w-1/2">
             <div className="border border-gray-10 rounded-lg p-4">
@@ -103,7 +111,7 @@ export default function PursuingStudiesChart({ programId, year }: Props) {
 
         // Group and combine duplicate entries
         const groupedData: Record<string, number> = {};
-        
+
         res.data.forEach((item: any) => {
           const key = item.name?.toLowerCase().trim();
           if (key) {
@@ -191,23 +199,22 @@ export default function PursuingStudiesChart({ programId, year }: Props) {
 
   const renderLegend = (props: any) => {
     const { payload } = props;
-    
+
     return (
       <div className="mt-4 px-2">
         <div className="grid grid-cols-1 gap-2">
           {payload.map((entry: any, index: number) => {
             const percent = total > 0 ? ((entry.payload.value / total) * 100).toFixed(1) : '0';
             const isMaxValue = entry.payload.value === maxValue;
-            
+
             return (
-              <div 
-                key={`legend-${index}`} 
-                className={`flex items-center justify-between p-2 rounded-lg ${
-                  isMaxValue ? 'bg-green-500/10 font-medium' : ''
-                }`}
+              <div
+                key={`legend-${index}`}
+                className={`flex items-center justify-between p-2 rounded-lg ${isMaxValue ? 'bg-green-500/10 font-medium' : ''
+                  }`}
               >
                 <div className="flex items-center gap-3">
-                  <div 
+                  <div
                     className="w-4 h-4 rounded-full flex-shrink-0"
                     style={{ backgroundColor: entry.color }}
                   />
@@ -227,7 +234,7 @@ export default function PursuingStudiesChart({ programId, year }: Props) {
             );
           })}
         </div>
-        
+
         {total > 0 && (
           <div className="mt-3 pt-3 border-t ">
             <div className="flex justify-between items-center">
@@ -251,7 +258,15 @@ export default function PursuingStudiesChart({ programId, year }: Props) {
       <CardContent>
         {data.length === 0 ? (
           <div className="flex h-64 items-center justify-center text-sm text-muted-foreground">
-            No further studies data available
+            <Empty>
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <BookOpen />
+                </EmptyMedia>
+                <EmptyTitle>No Further Status</EmptyTitle>
+                <EmptyDescription>No data found</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           </div>
         ) : (
           <div className="flex flex-col lg:flex-row items-center lg:items-start gap-6">
@@ -295,7 +310,7 @@ export default function PursuingStudiesChart({ programId, year }: Props) {
                       boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
                     }}
                     labelFormatter={(name) => `Response: ${name}`}
-                    labelStyle={{ 
+                    labelStyle={{
                       fontWeight: 600,
                       marginBottom: '4px'
                     }}
@@ -303,18 +318,20 @@ export default function PursuingStudiesChart({ programId, year }: Props) {
                 </PieChart>
               </ResponsiveContainer>
             </div>
-            
+
             {/* Legend */}
             <div className="w-full lg:w-1/2">
               <div className="border border-gray-10 rounded-lg p-4">
                 <h4 className="text-sm font-semibold mb-3 text-center">
                   Response Breakdown
                 </h4>
-                {renderLegend({ payload: data.map((item, index) => ({
-                  value: item.name,
-                  color: item.fill,
-                  payload: item
-                })) })}
+                {renderLegend({
+                  payload: data.map((item, index) => ({
+                    value: item.name,
+                    color: item.fill,
+                    payload: item
+                  }))
+                })}
               </div>
             </div>
           </div>

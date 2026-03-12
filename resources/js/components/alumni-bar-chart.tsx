@@ -152,9 +152,6 @@ export function AlumniBarChart({ alumniPerYear }: { alumniPerYear: AlumniPerYear
                               <div className="text-muted-foreground whitespace-nowrap">Data updated {new Date().toLocaleDateString()}</div>
                         </CardDescription>
                     </div>
-                    {/* <div className="p-3 rounded-full bg-blue-100">
-              <TrendingUp className="h-6 w-6 text-blue-600" />
-            </div> */}
                 </div>
             </CardHeader>
 

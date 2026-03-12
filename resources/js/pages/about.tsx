@@ -94,7 +94,7 @@ export default function AboutPage() {
             <div className="space-y-6 p-4 md:p-6">
                 {/* Header */}
                 <div>
-                    <h1 className="text-2xl font-semibold tracking-tight">About Us</h1>
+                    <h1 className="text-2xl font-semibold tracking-tight text-foreground">About Us</h1>
                     <p className="mt-1 text-sm text-muted-foreground">
                         Meet the team behind the Alumni Tracer system.
                     </p>

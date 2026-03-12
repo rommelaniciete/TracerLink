@@ -103,7 +103,7 @@ export default function AlumniUpdateForm({
 
   return (
     <form onSubmit={handleSubmit} className="mx-auto grid max-w-4xl grid-cols-1 gap-4 md:grid-cols-2">
-      <h2 className="col-span-2 text-2xl font-bold">Update AluRecwrynrthbtord</h2>
+      <h2 className="col-span-2 text-2xl font-semibold tracking-tight text-foreground">Update AluRecwrynrthbtord</h2>
 
       <div className="col-span-2">
         <label className="text-sm font-medium text-gray-700 mb-1 block">Student Number</label>

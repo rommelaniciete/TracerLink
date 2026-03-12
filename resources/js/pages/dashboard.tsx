@@ -44,16 +44,16 @@ export default function dashboard({ programs, alumniPerYear, ratingCounts }: Das
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Dashboard" />
 
-      <div className="px-5">
+      <div className="space-y-6 p-6">
         <SectionCards programs={programs} />
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <div className="space-y-7 mb-5">
+          <div className="space-y-12  ">
             <GraduatesLineChart />
             <AlumniRatingBarChart ratingCounts={ratingCounts} />
           </div>
 
-          <div className="space-y-1 mb-5">
+          <div className="space-y-6">
             <GenderChart />
             <AlumniBarChart alumniPerYear={alumniPerYear} />
           </div>
