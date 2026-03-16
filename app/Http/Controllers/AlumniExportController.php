@@ -14,8 +14,16 @@ class AlumniExportController extends Controller
     public function export(Request $request, AlumniExportService $exportService)
     {
         try {
-            $selectedIds = $request->input('selectedIds', []);
-            $excelOutput = $exportService->export($selectedIds);
+            $selectedIds = array_values(array_filter((array) $request->input('selectedIds', [])));
+            $filters = [
+                'search' => trim((string) $request->input('search', '')),
+                'graduation_year' => (string) $request->input('graduation_year', ''),
+                'program_id' => (string) $request->input('program_id', ''),
+                'employment_status' => (string) $request->input('employment_status', ''),
+                'work_location' => (string) $request->input('work_location', ''),
+                'sex' => (string) $request->input('sex', ''),
+            ];
+            $excelOutput = $exportService->export($filters, $selectedIds);
 
             return response($excelOutput)
                 ->header('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
@@ -27,7 +35,7 @@ class AlumniExportController extends Controller
             return response()->json([
                 'message' => 'Export failed',
                 'error'   => $e->getMessage(),
-            ], 500);
+            ], str_contains($e->getMessage(), 'No alumni found') ? 400 : 500);
         }
     }
 }

@@ -1,204 +1,240 @@
 'use client';
 
-import * as React from "react";
-import { useState, useMemo } from "react";
-import { usePage } from "@inertiajs/react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { RefreshCw, Download, BookA } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import * as XLSX from "xlsx";
-import { saveAs } from "file-saver";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@/components/ui/empty"
-type AlumniRow = {
-  id: number;
-  program_id: number;
-  last_name: string;
-  given_name: string;
-  middle_initial?: string;
-  sex?: string;
-  employment_status: string;
-  company_name?: string;
-  work_position?: string;
-  program?: { id: number; name: string };
-};
+import * as React from 'react';
 
-type Program = { id: number; name: string };
+import { DataPagination } from '@/components/data-pagination';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useDebouncedValue } from '@/hooks/use-debounced-value';
+import { toast } from '@/lib/toast';
+import { EmployabilityPageProps } from '@/types/records';
+import { router, usePage } from '@inertiajs/react';
+import axios from 'axios';
+import { BookA, Download, RefreshCw } from 'lucide-react';
 
 export default function EmployabilityPage() {
-  const { props } = usePage<{ alumni: AlumniRow[]; programs: Program[] }>();
-  const [query, setQuery] = useState("");
-  const [programFilter, setProgramFilter] = useState<string>("all");
+    const { props, url } = usePage<EmployabilityPageProps>();
+    const [search, setSearch] = React.useState(props.filters.search ?? '');
+    const [programId, setProgramId] = React.useState(props.filters.program_id || 'all');
+    const [perPage, setPerPage] = React.useState(String(props.filters.per_page ?? props.alumni.per_page ?? 10));
+    const [isFiltering, setIsFiltering] = React.useState(false);
+    const [isExporting, setIsExporting] = React.useState(false);
+    const debouncedSearch = useDebouncedValue(search);
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return props.alumni.filter(a => {
-      const matchesQuery = [
-        a.program?.name || 'N/A',
-        `${a.given_name || 'N/A'} ${a.middle_initial || ''} ${a.last_name || 'N/A'}`,
-        a.sex || 'N/A',
-        a.employment_status || 'N/A',
-        a.company_name || 'N/A',
-        a.work_position || 'N/A'
-      ].join(' ').toLowerCase().includes(q);
+    React.useEffect(() => {
+        setSearch(props.filters.search ?? '');
+        setProgramId(props.filters.program_id || 'all');
+        setPerPage(String(props.filters.per_page ?? props.alumni.per_page ?? 10));
+    }, [props.filters, props.alumni.per_page]);
 
-      const matchesProgram = programFilter === "all" || a.program?.name === programFilter;
-      return matchesQuery && matchesProgram;
-    });
-  }, [props.alumni, query, programFilter]);
+    const currentPath = React.useMemo(() => url.split('?')[0], [url]);
 
-  const exportToExcel = () => {
-    const data = filtered.map(a => ({
-      "Program Name": a.program?.name || "N/A",
-      "Graduate Name": `${a.last_name || "N/A"}, ${a.given_name || "N/A"} ${a.middle_initial || ""}`,
-      "Status": a.employment_status || "N/A",
-      "Sex": a.sex || "N/A",
-      "Company / Business": a.company_name || "N/A",
-      "Position / Work Nature": a.work_position || "N/A",
-    }));
+    const navigate = React.useCallback(
+        (next: { page?: number; search?: string; program_id?: string; per_page?: number }) => {
+            const params = {
+                search: next.search ?? debouncedSearch,
+                program_id: next.program_id ?? programId,
+                per_page: next.per_page ?? Number(perPage),
+                page: next.page ?? props.alumni.current_page,
+            };
 
-    // Create worksheet from JSON
-    const ws = XLSX.utils.json_to_sheet(data);
+            router.get(
+                currentPath,
+                {
+                    search: params.search || undefined,
+                    program_id: params.program_id !== 'all' ? params.program_id : undefined,
+                    per_page: params.per_page,
+                    page: params.page,
+                },
+                {
+                    preserveState: true,
+                    preserveScroll: true,
+                    replace: true,
+                    only: ['alumni', 'filters'],
+                    onStart: () => setIsFiltering(true),
+                    onFinish: () => setIsFiltering(false),
+                },
+            );
+        },
+        [currentPath, debouncedSearch, perPage, programId, props.alumni.current_page],
+    );
 
-    // Set column widths
-    ws['!cols'] = [
-      { wch: 25 },
-      { wch: 30 },
-      { wch: 15 },
-      { wch: 10 },
-      { wch: 35 },
-      { wch: 25 },
-    ];
+    React.useEffect(() => {
+        const currentSearch = props.filters.search ?? '';
+        const currentProgram = props.filters.program_id || 'all';
+        const currentPerPage = String(props.filters.per_page ?? props.alumni.per_page ?? 10);
 
-    // Bold the header row
-    const header = Object.keys(data[0] || {});
-    header.forEach((_, i) => {
-      const cell = ws[XLSX.utils.encode_cell({ r: 0, c: i })];
-      if (cell) {
-        cell.v = cell.v.toString();
-      }
-    });
+        if (debouncedSearch === currentSearch && programId === currentProgram && perPage === currentPerPage) {
+            return;
+        }
 
-    // Create workbook and append worksheet
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Employability");
+        navigate({
+            page: 1,
+            search: debouncedSearch,
+            program_id: programId,
+            per_page: Number(perPage),
+        });
+    }, [debouncedSearch, navigate, perPage, programId, props.alumni.per_page, props.filters.program_id, props.filters.per_page, props.filters.search]);
 
-    // Save as Excel file
-    XLSX.writeFile(wb, "Employability_Report.xlsx");
-  };
+    const handleExport = async () => {
+        setIsExporting(true);
 
-  return (
-    <div>
-      <Card>
-        <CardHeader className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Employability Report</h1>
-            <p className="mt-1 text-sm text-muted-foreground">Generate and print a detailed report of alumni employability data.</p>
-          </div>
-          <div className="flex flex-col md:flex-row items-start md:items-center gap-2">
-            <Input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search alumni, program, or company..."
-              className="w-64"
-            />
-            <Select value={programFilter} onValueChange={setProgramFilter}>
-              <SelectTrigger className="w-[180px]">
-                <SelectValue placeholder="Select program" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Programs</SelectItem>
-                {props.programs.map(p => (
-                  <SelectItem key={p.id} value={p.name}>{p.name}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => { setQuery(''); setProgramFilter('all'); }}
-              title="Reset filters"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              onClick={exportToExcel}
-              title="Export to Excel"
-              className="flex items-center gap-2"
-            >
-              <Download className="h-4 w-4" />
-              Export Excel
-            </Button>
-          </div>
-        </CardHeader>
+        try {
+            const response = await axios.post(
+                '/employability/export',
+                {
+                    search: debouncedSearch,
+                    program_id: programId !== 'all' ? programId : '',
+                },
+                { responseType: 'blob' },
+            );
 
-        <CardContent>
-          <div className="w-full overflow-x-auto rounded-2xl border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>PROGRAM NAME</TableHead>
-                  <TableHead>NAME OF ALUMNI</TableHead>
-                  <TableHead>STATUS</TableHead>
-                  <TableHead>SEX</TableHead>
-                  <TableHead>NAME OF COMPANY / TYPE OF BUSINESS</TableHead>
-                  <TableHead>POSITION / NATURE OF WORK</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map(a => (
-                  <TableRow key={a.id} className="hover:bg-muted/40">
-                    <TableCell>{a.program?.name || 'N/A'}</TableCell>
-                    <TableCell>{`${a.last_name || 'N/A'}, ${a.given_name || 'N/A'} ${a.middle_initial || ''}`}</TableCell>
-                    <TableCell>{a.employment_status || 'N/A'}</TableCell>
-                    <TableCell>{a.sex || 'N/A'}</TableCell>
-                    <TableCell>{a.company_name || 'N/A'}</TableCell>
-                    <TableCell>{a.work_position || 'N/A'}</TableCell>
-                  </TableRow>
-                ))}
-                {filtered.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      <Empty>
-                        <EmptyHeader>
-                          <EmptyMedia variant="icon">
-                            <BookA />
-                          </EmptyMedia>
-                          <EmptyTitle>No Employability</EmptyTitle>
-                          <EmptyDescription>No data found</EmptyDescription>
-                        </EmptyHeader>
-                      </Empty>
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  );
+            const blob = new Blob([response.data], {
+                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            });
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = 'employability-report.xlsx';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(downloadUrl);
+        } catch (error) {
+            if (axios.isAxiosError(error)) {
+                toast.error(error.response?.data?.message || 'Failed to export employability report.');
+            } else {
+                toast.error('Failed to export employability report.');
+            }
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
+    const rows = props.alumni.data;
+
+    return (
+        <Card>
+            <CardHeader className="flex flex-col gap-4">
+                <div>
+                    <h1 className="text-2xl font-semibold tracking-tight text-foreground">Employability Report</h1>
+                    <p className="mt-1 text-sm text-muted-foreground">Generate and print a detailed report of alumni employability data.</p>
+                </div>
+
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex flex-1 flex-col gap-3 sm:flex-row">
+                        <Input
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder="Search alumni, program, or company..."
+                            className="w-full sm:max-w-sm"
+                        />
+
+                        <Select value={programId} onValueChange={setProgramId}>
+                            <SelectTrigger className="w-full sm:w-[220px]">
+                                <SelectValue placeholder="Select program" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Programs</SelectItem>
+                                {props.programs.map((program) => (
+                                    <SelectItem key={program.id} value={String(program.id)}>
+                                        {program.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => {
+                                setSearch('');
+                                setProgramId('all');
+                                setPerPage('10');
+                            }}
+                            title="Reset filters"
+                        >
+                            <RefreshCw className="h-4 w-4" />
+                        </Button>
+                        <Button variant="outline" onClick={handleExport} disabled={isExporting} className="gap-2">
+                            <Download className="h-4 w-4" />
+                            {isExporting ? 'Exporting...' : 'Export Excel'}
+                        </Button>
+                    </div>
+                </div>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+                <div className="overflow-x-auto rounded-xl border">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>PROGRAM NAME</TableHead>
+                                <TableHead>NAME OF ALUMNI</TableHead>
+                                <TableHead>STATUS</TableHead>
+                                <TableHead>SEX</TableHead>
+                                <TableHead>NAME OF COMPANY / TYPE OF BUSINESS</TableHead>
+                                <TableHead>POSITION / NATURE OF WORK</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {isFiltering ? (
+                                Array.from({ length: Math.min(props.alumni.per_page, 5) }).map((_, index) => (
+                                    <TableRow key={index}>
+                                        {Array.from({ length: 6 }).map((__, cellIndex) => (
+                                            <TableCell key={cellIndex}>
+                                                <Skeleton className="h-5 w-full" />
+                                            </TableCell>
+                                        ))}
+                                    </TableRow>
+                                ))
+                            ) : rows.length > 0 ? (
+                                rows.map((alumnus) => (
+                                    <TableRow key={alumnus.id} className="hover:bg-muted/40">
+                                        <TableCell>{alumnus.program?.name || 'N/A'}</TableCell>
+                                        <TableCell>{`${alumnus.last_name || 'N/A'}, ${alumnus.given_name || 'N/A'} ${alumnus.middle_initial || ''}`}</TableCell>
+                                        <TableCell>{alumnus.employment_status || 'N/A'}</TableCell>
+                                        <TableCell>{alumnus.sex || 'N/A'}</TableCell>
+                                        <TableCell>{alumnus.company_name || 'N/A'}</TableCell>
+                                        <TableCell>{alumnus.work_position || 'N/A'}</TableCell>
+                                    </TableRow>
+                                ))
+                            ) : (
+                                <TableRow>
+                                    <TableCell colSpan={6} className="py-10">
+                                        <Empty>
+                                            <EmptyHeader>
+                                                <EmptyMedia variant="icon">
+                                                    <BookA />
+                                                </EmptyMedia>
+                                                <EmptyTitle>No Employability</EmptyTitle>
+                                                <EmptyDescription>No data found</EmptyDescription>
+                                            </EmptyHeader>
+                                        </Empty>
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </TableBody>
+                    </Table>
+                </div>
+
+                <DataPagination
+                    pagination={props.alumni}
+                    itemLabel="records"
+                    disabled={isFiltering}
+                    onPageChange={(page) => navigate({ page })}
+                    onPerPageChange={(value) => {
+                        setPerPage(String(value));
+                    }}
+                />
+            </CardContent>
+        </Card>
+    );
 }

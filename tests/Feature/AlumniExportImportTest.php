@@ -149,7 +149,7 @@ class AlumniExportImportTest extends TestCase
         $response->assertJsonPath('total_rows', 1);
         $this->assertEquals(1, count($response->json('errors')));
         $response->assertJsonPath('errors.0.row', 4);
-        $response->assertStringContainsString('Sex', $response->json('errors.0.reason'));
+        $this->assertStringContainsString('Sex', $response->json('errors.0.reason'));
         $this->assertDatabaseMissing('alumni', ['student_number' => '2024002']);
     }
 
@@ -270,7 +270,7 @@ class AlumniExportImportTest extends TestCase
         $response->assertJsonPath('imported', 0);
         $response->assertJsonPath('total_rows', 1);
         $this->assertEquals(1, count($response->json('errors')));
-        $response->assertStringContainsString('Student Number is required.', $response->json('errors.0.reason'));
+        $this->assertStringContainsString('Student Number is required.', $response->json('errors.0.reason'));
     }
 
     /**
@@ -427,6 +427,8 @@ class AlumniExportImportTest extends TestCase
      */
     public function test_bulk_delete_alumni()
     {
+        $user = User::factory()->create();
+
         $alumni1 = Alumni::create([
             'student_number' => '2023001',
             'email' => 'alumni1@example.com',
@@ -460,7 +462,7 @@ class AlumniExportImportTest extends TestCase
         $this->assertCount(2, Alumni::all());
 
         // Delete alumni1
-        $response = $this->deleteJson("/alumni/{$alumni1->id}");
+        $response = $this->actingAs($user)->deleteJson("/alumni/{$alumni1->id}");
         $response->assertStatus(200);
 
         $this->assertCount(1, Alumni::all());

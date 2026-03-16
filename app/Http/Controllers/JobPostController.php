@@ -1,67 +1,35 @@
 <?php
 
 namespace App\Http\Controllers;
-// Controller for managing job posts
-use Illuminate\Http\Request;
-use Inertia\Inertia;
-use App\Models\JobPost;
-use App\Models\Alumni;
-use Illuminate\Support\Facades\Mail;
-use App\Mail\JobNotificationMail;
+
 use App\Mail\CreateJobPostMail;
+use App\Mail\JobNotificationMail;
+use App\Models\Alumni;
+use App\Models\JobPost;
 use App\Models\Program;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
+use Inertia\Inertia;
 
 class JobPostController extends Controller
 {
-    // 📝 List all job posts with programs and date filtering
     public function index(Request $request)
     {
-        $query = JobPost::latest();
-        
-        // Date range filtering
-        if ($request->has('start_date') && $request->has('end_date')) {
-            $startDate = Carbon::parse($request->start_date)->startOfDay();
-            $endDate = Carbon::parse($request->end_date)->endOfDay();
-            
-            $query->where(function ($q) use ($startDate, $endDate) {
-                $q->whereBetween('posted_date', [$startDate, $endDate])
-                  ->orWhereBetween('application_deadline', [$startDate, $endDate])
-                  ->orWhereBetween('start_date', [$startDate, $endDate]);
-            });
-        }
-        
-        // Filter by status if provided
-        if ($request->has('status') && in_array($request->status, ['active', 'inactive'])) {
-            $query->where('status', $request->status);
-        }
-        
-        // Filter expired jobs
-        if ($request->has('show_expired')) {
-            $query->expired();
-        }
-        
-        // Filter active jobs (not expired)
-        if ($request->has('show_active')) {
-            $query->active();
-        }
-        
-        // Filter upcoming jobs
-        if ($request->has('show_upcoming')) {
-            $query->upcoming();
-        }
-
-        $jobs = $query->get();
-        $programs = Program::select('id', 'name')->get();
+        $filters = $this->filters($request);
+        $jobs = $this->query($filters)
+            ->paginate($filters['per_page'])
+            ->withQueryString()
+            ->through(fn (JobPost $jobPost) => $this->payload($jobPost));
 
         return Inertia::render('job', [
             'jobs' => $jobs,
-            'programs' => $programs,
-            'filters' => $request->only(['start_date', 'end_date', 'status', 'show_expired', 'show_active', 'show_upcoming'])
+            'programs' => Program::query()->select('id', 'name')->orderBy('name')->get(),
+            'filters' => $filters,
         ]);
     }
 
-    // ➕ Store a new job post
     public function store(Request $request)
     {
         $validated = $request->validate([
@@ -74,24 +42,21 @@ class JobPostController extends Controller
             'responsibilities' => 'nullable|string',
             'apply_link' => 'nullable|string|max:255',
             'status' => 'required|in:active,inactive',
-            // Date validation
             'posted_date' => 'nullable|date',
             'application_deadline' => 'nullable|date|after_or_equal:posted_date',
             'start_date' => 'nullable|date|after_or_equal:posted_date',
         ]);
 
-        // Set posted_date to current date if not provided
         if (empty($validated['posted_date'])) {
             $validated['posted_date'] = now();
         }
 
-        JobPost::create($validated);
+        JobPost::query()->create($validated);
 
-        return redirect()->route('job-posts.index')
-                         ->with('success', 'Job post created successfully.');
+        return redirect()->back()
+            ->with('success', 'Job post created successfully.');
     }
 
-    // ✏️ Update existing job post
     public function update(Request $request, JobPost $jobPost)
     {
         $validated = $request->validate([
@@ -104,7 +69,6 @@ class JobPostController extends Controller
             'responsibilities' => 'nullable|string',
             'apply_link' => 'nullable|string|max:255',
             'status' => 'required|in:active,inactive',
-            // Date validation
             'posted_date' => 'nullable|date',
             'application_deadline' => 'nullable|date|after_or_equal:posted_date',
             'start_date' => 'nullable|date|after_or_equal:posted_date',
@@ -112,20 +76,18 @@ class JobPostController extends Controller
 
         $jobPost->update($validated);
 
-        return redirect()->route('job-posts.index')
-                         ->with('success', 'Job post updated successfully.');
+        return redirect()->back()
+            ->with('success', 'Job post updated successfully.');
     }
 
-    // 🗑 Delete a job post
     public function destroy(JobPost $jobPost)
     {
         $jobPost->delete();
 
-        return redirect()->route('job-posts.index')
-                         ->with('success', 'Job post deleted successfully.');
+        return redirect()->back()
+            ->with('success', 'Job post deleted successfully.');
     }
 
-    // 📧 Send email to unemployed alumni by program
     public function sendEmail(Request $request)
     {
         $validated = $request->validate([
@@ -133,20 +95,17 @@ class JobPostController extends Controller
             'program_id' => 'nullable|integer|exists:programs,id',
         ]);
 
-        $job = JobPost::findOrFail($validated['job_id']);
-        
+        $job = JobPost::query()->findOrFail($validated['job_id']);
 
-        // Only send emails for active jobs that haven't expired
-        if (!$job->isActive()) {
+        if (! $job->isActive()) {
             return response()->json([
                 'message' => 'Cannot send notifications for inactive or expired job posts.',
             ], 422);
         }
 
-        $unemployedAlumni = Alumni::where('employment_status', 'Unemployed')
-            ->when($validated['program_id'] ?? null, function ($query, $programId) {
-                return $query->where('program_id', $programId);
-            })
+        $unemployedAlumni = Alumni::query()
+            ->where('employment_status', 'Unemployed')
+            ->when($validated['program_id'] ?? null, fn (Builder $query, $programId) => $query->where('program_id', $programId))
             ->get();
 
         if ($unemployedAlumni->isEmpty()) {
@@ -155,56 +114,109 @@ class JobPostController extends Controller
             ], 404);
         }
 
-        foreach ($unemployedAlumni as $alumni) {
+        foreach ($unemployedAlumni as $alumnus) {
             try {
-                Mail::to($alumni->email)->queue(new JobNotificationMail($job));
-            } catch (\Exception $e) {
-                \Log::error('Mail failed: ' . $e->getMessage());
+                Mail::to($alumnus->email)->queue(new JobNotificationMail($job));
+            } catch (\Exception $exception) {
+                \Log::error('Mail failed: ' . $exception->getMessage());
             }
         }
 
         return response()->json(['message' => 'Emails sent successfully']);
     }
 
-    // 📧 Send email to ALL employed alumni to create new job post
     public function sendEmailToAllEmployed()
     {
-        $employedAlumni = Alumni::where('employment_status', 'Employed')->get();
+        $employedAlumni = Alumni::query()->where('employment_status', 'Employed')->get();
 
         if ($employedAlumni->isEmpty()) {
             return response()->json(['message' => 'No employed alumni found.'], 404);
         }
 
-        foreach ($employedAlumni as $alumni) {
+        foreach ($employedAlumni as $alumnus) {
             try {
-                $formUrl = route('job-posts.index'); // Link sa job creation form
-                Mail::to($alumni->email)->send(new CreateJobPostMail($alumni, $formUrl));
-            } catch (\Exception $e) {
-                \Log::error('Mail failed: ' . $e->getMessage());
+                $formUrl = route('job-posts.index');
+                Mail::to($alumnus->email)->send(new CreateJobPostMail($alumnus, $formUrl));
+            } catch (\Exception $exception) {
+                \Log::error('Mail failed: ' . $exception->getMessage());
             }
         }
 
         return response()->json(['message' => 'Emails sent to all employed alumni successfully.']);
     }
-    
-    // 🔍 Get job posts by date range (API endpoint)
+
     public function getByDateRange(Request $request)
     {
         $validated = $request->validate([
             'start_date' => 'required|date',
             'end_date' => 'required|date|after_or_equal:start_date',
-            'date_field' => 'nullable|in:posted_date,application_deadline,start_date'
+            'date_field' => 'nullable|in:posted_date,application_deadline,start_date',
         ]);
-        
-       $jobs = $query->paginate(10)->withQueryString();
-        
+
         $dateField = $validated['date_field'] ?? 'posted_date';
-        
-        $jobs = $query->whereBetween($dateField, [
-            Carbon::parse($validated['start_date'])->startOfDay(),
-            Carbon::parse($validated['end_date'])->endOfDay()
-        ])->get();
-        
+        $jobs = JobPost::query()
+            ->whereBetween($dateField, [
+                Carbon::parse($validated['start_date'])->startOfDay(),
+                Carbon::parse($validated['end_date'])->endOfDay(),
+            ])
+            ->latest()
+            ->get();
+
         return response()->json(['jobs' => $jobs]);
+    }
+
+    private function query(array $filters): Builder
+    {
+        return JobPost::query()
+            ->latest()
+            ->search($filters['search'])
+            ->when($filters['start_date'] !== '' && $filters['end_date'] !== '', function (Builder $query) use ($filters) {
+                $startDate = Carbon::parse($filters['start_date'])->startOfDay();
+                $endDate = Carbon::parse($filters['end_date'])->endOfDay();
+                $query->betweenDates($startDate, $endDate);
+            })
+            ->when(in_array($filters['status'], ['active', 'inactive'], true), fn (Builder $query) => $query->where('status', $filters['status']))
+            ->when($filters['show_expired'], fn (Builder $query) => $query->expired())
+            ->when($filters['show_active'], fn (Builder $query) => $query->active())
+            ->when($filters['show_upcoming'], fn (Builder $query) => $query->upcoming());
+    }
+
+    private function filters(Request $request): array
+    {
+        $perPage = (int) $request->input('per_page', 10);
+
+        if (! in_array($perPage, [10, 20, 50, 100], true)) {
+            $perPage = 10;
+        }
+
+        return [
+            'search' => trim((string) $request->input('search', '')),
+            'per_page' => $perPage,
+            'start_date' => (string) $request->input('start_date', ''),
+            'end_date' => (string) $request->input('end_date', ''),
+            'status' => (string) $request->input('status', ''),
+            'show_expired' => $request->boolean('show_expired'),
+            'show_active' => $request->boolean('show_active'),
+            'show_upcoming' => $request->boolean('show_upcoming'),
+        ];
+    }
+
+    private function payload(JobPost $jobPost): array
+    {
+        return [
+            'id' => $jobPost->id,
+            'title' => $jobPost->title,
+            'description' => $jobPost->description,
+            'company_name' => $jobPost->company_name,
+            'location' => $jobPost->location,
+            'location_link' => $jobPost->location_link,
+            'requirements' => $jobPost->requirements,
+            'responsibilities' => $jobPost->responsibilities,
+            'apply_link' => $jobPost->apply_link,
+            'status' => $jobPost->status,
+            'posted_date' => optional($jobPost->posted_date)->format('Y-m-d'),
+            'application_deadline' => optional($jobPost->application_deadline)->format('Y-m-d'),
+            'start_date' => optional($jobPost->start_date)->format('Y-m-d'),
+        ];
     }
 }

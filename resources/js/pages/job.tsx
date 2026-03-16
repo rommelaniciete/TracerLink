@@ -1,29 +1,22 @@
 'use client';
 
-import { Head } from '@inertiajs/react';
+import JobPost from '@/components/JobPost';
 import AppLayout from '@/layouts/app-layout';
 import { type BreadcrumbItem } from '@/types';
-import JobPost from '@/components/JobPost';
-
-
+import { Head } from '@inertiajs/react';
 
 const breadcrumbs: BreadcrumbItem[] = [
-  {
-    title: 'Data Analytics',
-    href: '/jobpost',
-  },
+    {
+        title: 'Job Posts',
+        href: '/jobpost',
+    },
 ];
 
-export default function Data() {
-
-  return (
-    <AppLayout breadcrumbs={breadcrumbs}>
-      <Head title="Job Opportunity" />
-
-<div>
-    <JobPost/>
-</div>
-
-    </AppLayout>
-  );
+export default function JobPostPage() {
+    return (
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Job Posts" />
+            <JobPost />
+        </AppLayout>
+    );
 }

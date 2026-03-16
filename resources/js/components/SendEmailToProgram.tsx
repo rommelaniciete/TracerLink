@@ -12,7 +12,7 @@ type Student = {
     id: number;
     student_number: string;
     student_name: string;
-    email?: string;
+    email?: string | null;
 };
 
 interface Props {

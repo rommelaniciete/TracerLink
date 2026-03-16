@@ -3,12 +3,13 @@
 namespace App\Services;
 
 use App\Models\Alumni;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpSpreadsheet\Style\Border;
-use PhpOffice\PhpSpreadsheet\Style\Alignment;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class AlumniExportService
 {
@@ -37,44 +38,34 @@ class AlumniExportService
     protected const CAMPUS_NAME = 'Lubao, Campus';
     protected const HEADER_BG_COLOR = 'D9E1F2';
 
-    /**
-     * Export alumni to Excel spreadsheet
-     */
-    public function export(array $selectedIds = []): string
+    public function export(array $filters = [], array $selectedIds = []): string
     {
         try {
-            $alumni = $this->queryAlumni($selectedIds);
+            $alumni = $this->queryAlumni($filters, $selectedIds);
 
             if ($alumni->isEmpty()) {
                 throw new \Exception('No alumni found for export.');
             }
 
             $spreadsheet = $this->createSpreadsheet($alumni);
+
             return $this->saveSpreadsheet($spreadsheet);
-        } catch (\Exception $e) {
-            Log::error('Alumni export failed: ' . $e->getMessage());
-            throw $e;
+        } catch (\Exception $exception) {
+            Log::error('Alumni export failed: ' . $exception->getMessage());
+            throw $exception;
         }
     }
 
-    /**
-     * Query alumni with optional filtering
-     */
-    protected function queryAlumni(array $selectedIds): \Illuminate\Database\Eloquent\Collection
+    protected function queryAlumni(array $filters, array $selectedIds): Collection
     {
-        $query = Alumni::with('program');
-        
-        if (!empty($selectedIds)) {
-            $query->whereIn('id', $selectedIds);
-        }
-        
-        return $query->get();
+        return Alumni::query()
+            ->with('program')
+            ->when(! empty($selectedIds), fn ($query) => $query->whereIn('id', $selectedIds), fn ($query) => $query->managementFilters($filters))
+            ->orderByDesc('id')
+            ->get();
     }
 
-    /**
-     * Create formatted spreadsheet
-     */
-    protected function createSpreadsheet($alumni): Spreadsheet
+    protected function createSpreadsheet(Collection $alumni): Spreadsheet
     {
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
@@ -88,13 +79,10 @@ class AlumniExportService
         return $spreadsheet;
     }
 
-    /**
-     * Add university heading rows
-     */
     protected function addUniversityHeading($sheet): void
     {
         $sheet->insertNewRowBefore(1, 2);
-        
+
         $lastCol = chr(64 + count(self::HEADERS));
         $sheet->mergeCells("A1:{$lastCol}1");
         $sheet->mergeCells("A2:{$lastCol}2");
@@ -102,7 +90,7 @@ class AlumniExportService
         $sheet->setCellValue('A1', self::UNIVERSITY_NAME);
         $sheet->setCellValue('A2', self::CAMPUS_NAME);
 
-        $sheet->getStyle("A1:A2")->applyFromArray([
+        $sheet->getStyle('A1:A2')->applyFromArray([
             'font' => [
                 'name' => 'Times New Roman',
                 'size' => 14,
@@ -110,18 +98,15 @@ class AlumniExportService
             ],
             'alignment' => [
                 'horizontal' => Alignment::HORIZONTAL_CENTER,
-                'vertical'   => Alignment::VERTICAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
             ],
         ]);
     }
 
-    /**
-     * Add header row
-     */
     protected function addHeaders($sheet): void
     {
         $sheet->fromArray([self::HEADERS], null, 'A3');
-        
+
         $lastCol = chr(64 + count(self::HEADERS));
         $sheet->getStyle("A3:{$lastCol}3")->applyFromArray([
             'font' => ['bold' => true],
@@ -136,51 +121,43 @@ class AlumniExportService
         ]);
     }
 
-    /**
-     * Add alumni data rows
-     */
-    protected function addData($sheet, $alumni): void
+    protected function addData($sheet, Collection $alumni): void
     {
         $rowIndex = 4;
-        
-        foreach ($alumni as $a) {
+
+        foreach ($alumni as $alumnus) {
             $sheet->fromArray([[
-                $a->student_number,
-                $a->email,
-                $a->program ? $a->program->name : null,
-                $a->last_name,
-                $a->given_name,
-                $a->middle_initial,
-                $a->sex,
-                $a->present_address,
-                $a->contact_number,
-                $a->graduation_year,
-                $a->employment_status,
-                $a->company_name,
-                $a->further_studies,
-                $a->sector,
-                $a->work_location,
-                $a->employer_classification,
-                $a->related_to_course,
-                $a->consent ? 'Yes' : 'No',
+                $alumnus->student_number,
+                $alumnus->email,
+                $alumnus->program?->name,
+                $alumnus->last_name,
+                $alumnus->given_name,
+                $alumnus->middle_initial,
+                $alumnus->sex,
+                $alumnus->present_address,
+                $alumnus->contact_number,
+                $alumnus->graduation_year,
+                $alumnus->employment_status,
+                $alumnus->company_name,
+                $alumnus->further_studies,
+                $alumnus->sector,
+                $alumnus->work_location,
+                $alumnus->employer_classification,
+                $alumnus->related_to_course,
+                $alumnus->consent ? 'Yes' : 'No',
             ]], null, 'A' . $rowIndex++);
         }
     }
 
-    /**
-     * Format spreadsheet styling and sizing
-     */
     protected function formatSpreadsheet($sheet): void
     {
         $lastCol = chr(64 + count(self::HEADERS));
-        
-        // Auto-size columns
-        foreach (range('A', $lastCol) as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(true);
+        $lastRow = $sheet->getHighestRow();
+
+        foreach (range('A', $lastCol) as $column) {
+            $sheet->getColumnDimension($column)->setAutoSize(true);
         }
 
-        // Add borders to all content
-        $lastRow = $sheet->getHighestRow();
         $sheet->getStyle("A3:{$lastCol}{$lastRow}")->applyFromArray([
             'borders' => [
                 'allBorders' => ['borderStyle' => Border::BORDER_THIN],
@@ -189,14 +166,12 @@ class AlumniExportService
         ]);
     }
 
-    /**
-     * Save spreadsheet to file and return as download
-     */
-    protected function saveSpreadsheet($spreadsheet): string
+    protected function saveSpreadsheet(Spreadsheet $spreadsheet): string
     {
         $writer = new Xlsx($spreadsheet);
         ob_start();
         $writer->save('php://output');
-        return ob_get_clean();
+
+        return (string) ob_get_clean();
     }
 }

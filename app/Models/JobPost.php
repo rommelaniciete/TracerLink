@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Builder;
 
 class JobPost extends Model
 {
@@ -71,6 +72,25 @@ class JobPost extends Model
             $query->whereBetween('posted_date', [$startDate, $endDate])
                   ->orWhereBetween('application_deadline', [$startDate, $endDate])
                   ->orWhereBetween('start_date', [$startDate, $endDate]);
+        });
+    }
+
+    public function scopeSearch(Builder $query, ?string $search): Builder
+    {
+        $term = trim((string) $search);
+
+        if ($term === '') {
+            return $query;
+        }
+
+        return $query->where(function (Builder $builder) use ($term) {
+            $builder
+                ->where('title', 'like', "%{$term}%")
+                ->orWhere('description', 'like', "%{$term}%")
+                ->orWhere('company_name', 'like', "%{$term}%")
+                ->orWhere('location', 'like', "%{$term}%")
+                ->orWhere('requirements', 'like', "%{$term}%")
+                ->orWhere('responsibilities', 'like', "%{$term}%");
         });
     }
 

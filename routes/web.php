@@ -111,6 +111,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::post('/students', [StudentController::class, 'store'])->name('students.store');
     Route::put('/students/{student}', [StudentController::class, 'update'])->name('students.update');
     Route::delete('/students/{student}', [StudentController::class, 'destroy'])->name('students.destroy');
+    Route::post('/students/export', [StudentController::class, 'export'])->name('students.export');
 
     // ✅ API Route for Dynamic Programs Dropdown
     Route::get('/students/programs', [StudentController::class, 'programList'])->name('students.programs');
@@ -125,6 +126,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // 👈 Employability Route ✅
     Route::get('/employability', [EmployabilityController::class, 'index'])->name('employability.index');
+    Route::post('/employability/export', [EmployabilityController::class, 'export'])->name('employability.export');
 
     // 🧠 API for Frontend Fetching
     Route::get('/alumni-form', [ProgramController::class, 'create']);
