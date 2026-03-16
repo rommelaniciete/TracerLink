@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { AlumniForm } from '@/components/AlumniForm';
 import { DataPagination } from '@/components/data-pagination';
+import { ImportProgressPanel, createIdleImportProgressState } from '@/components/import-progress-panel';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -16,11 +17,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { echo } from '@/echo';
 import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { toast } from '@/lib/toast';
-import { AlumniFilters, AlumniRecord, ProgramOption } from '@/types/records';
 import { PaginatedResponse } from '@/types/pagination';
+import { AlumniFilters, AlumniRecord, ProgramOption } from '@/types/records';
 import { usePage } from '@inertiajs/react';
-import axios from 'axios';
-import { DownloadIcon, FileUp, MoreVertical, PlusIcon, Trash2Icon, Upload, Users } from 'lucide-react';
+import axios, { type AxiosProgressEvent } from 'axios';
+import { DownloadIcon, FileUp, Loader2, MoreVertical, PlusIcon, Trash2Icon, Upload, Users } from 'lucide-react';
 
 const DEFAULT_FILTERS: AlumniFilters = {
     search: '',
@@ -88,9 +89,11 @@ export function AlumniTable() {
     const [loading, setLoading] = React.useState(true);
     const [deleteLoading, setDeleteLoading] = React.useState<number | null>(null);
     const [bulkDeleteLoading, setBulkDeleteLoading] = React.useState(false);
-    const [importLoading, setImportLoading] = React.useState(false);
+    const [importProgress, setImportProgress] = React.useState(createIdleImportProgressState);
     const [exportLoading, setExportLoading] = React.useState(false);
+    const [importInputKey, setImportInputKey] = React.useState(0);
     const debouncedSearch = useDebouncedValue(filters.search);
+    const isImportBusy = importProgress.phase !== 'idle';
 
     const selectedCount = React.useMemo(() => Object.keys(selectedAlumni).length, [selectedAlumni]);
 
@@ -163,7 +166,17 @@ export function AlumniTable() {
         };
 
         fetchAlumni(nextFilters, pageNumber);
-    }, [debouncedSearch, fetchAlumni, filters.employment_status, filters.graduation_year, filters.per_page, filters.program_id, filters.sex, filters.work_location, pageNumber]);
+    }, [
+        debouncedSearch,
+        fetchAlumni,
+        filters.employment_status,
+        filters.graduation_year,
+        filters.per_page,
+        filters.program_id,
+        filters.sex,
+        filters.work_location,
+        pageNumber,
+    ]);
 
     React.useEffect(() => {
         if (typeof window === 'undefined' || !echo) {
@@ -275,19 +288,74 @@ export function AlumniTable() {
         }
     };
 
+    const resetImportDialog = React.useCallback((options?: { clearFile?: boolean }) => {
+        setImportProgress(createIdleImportProgressState());
+
+        if (options?.clearFile) {
+            setImportFile(null);
+            setImportInputKey((current) => current + 1);
+        }
+    }, []);
+
+    const handleImportDialogOpenChange = React.useCallback(
+        (nextOpen: boolean) => {
+            if (!nextOpen && isImportBusy) {
+                return;
+            }
+
+            setImportOpen(nextOpen);
+
+            if (!nextOpen) {
+                resetImportDialog({ clearFile: true });
+            }
+        },
+        [isImportBusy, resetImportDialog],
+    );
+
+    const handleImportFileChange = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+        const nextFile = event.target.files?.[0] ?? null;
+        setImportFile(nextFile);
+        setImportProgress({
+            phase: 'idle',
+            uploadPercent: null,
+            uploadedBytes: null,
+            totalBytes: null,
+            selectedFileName: nextFile?.name ?? null,
+        });
+    }, []);
+
     const handleImport = async () => {
         if (!importFile) {
             toast.error('Please select a file');
             return;
         }
 
-        setImportLoading(true);
+        setImportProgress({
+            phase: 'uploading',
+            uploadPercent: 0,
+            uploadedBytes: 0,
+            totalBytes: importFile.size || null,
+            selectedFileName: importFile.name,
+        });
         const formData = new FormData();
         formData.append('file', importFile);
 
         try {
             const response = await axios.post('/alumni/import', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
+                onUploadProgress: (progressEvent: AxiosProgressEvent) => {
+                    const totalBytes = typeof progressEvent.total === 'number' && progressEvent.total > 0 ? progressEvent.total : null;
+                    const uploadedBytes = typeof progressEvent.loaded === 'number' ? progressEvent.loaded : null;
+                    const nextPercent = totalBytes && uploadedBytes !== null ? Math.min(100, Math.round((uploadedBytes * 100) / totalBytes)) : null;
+
+                    setImportProgress((current) => ({
+                        ...current,
+                        phase: nextPercent !== null && nextPercent >= 100 ? 'processing' : 'uploading',
+                        uploadPercent: nextPercent,
+                        uploadedBytes: uploadedBytes ?? current.uploadedBytes,
+                        totalBytes: totalBytes ?? current.totalBytes,
+                    }));
+                },
             });
 
             const imported = Number(response.data?.imported ?? 0);
@@ -297,6 +365,7 @@ export function AlumniTable() {
                 toast.success(`${imported} row(s) imported`);
                 setImportOpen(false);
                 setImportFile(null);
+                setImportInputKey((current) => current + 1);
                 fetchAlumni({ ...filters, search: debouncedSearch }, 1);
             }
 
@@ -310,7 +379,7 @@ export function AlumniTable() {
                 toast.error('Import failed.');
             }
         } finally {
-            setImportLoading(false);
+            setImportProgress(createIdleImportProgressState());
         }
     };
 
@@ -369,25 +438,35 @@ export function AlumniTable() {
                 <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
                     <Input placeholder="Search alumni..." value={filters.search} onChange={(event) => updateFilter('search', event.target.value)} />
                     <Select value={filters.graduation_year} onValueChange={(value) => updateFilter('graduation_year', value)}>
-                        <SelectTrigger><SelectValue placeholder="Select year" /></SelectTrigger>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select year" />
+                        </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Years</SelectItem>
                             {graduationYears.map((year) => (
-                                <SelectItem key={year} value={year}>{year}</SelectItem>
+                                <SelectItem key={year} value={year}>
+                                    {year}
+                                </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
                     <Select value={filters.program_id} onValueChange={(value) => updateFilter('program_id', value)}>
-                        <SelectTrigger><SelectValue placeholder="Select program" /></SelectTrigger>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select program" />
+                        </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Programs</SelectItem>
                             {programs.map((program) => (
-                                <SelectItem key={program.id} value={String(program.id)}>{program.name}</SelectItem>
+                                <SelectItem key={program.id} value={String(program.id)}>
+                                    {program.name}
+                                </SelectItem>
                             ))}
                         </SelectContent>
                     </Select>
                     <Select value={filters.employment_status} onValueChange={(value) => updateFilter('employment_status', value)}>
-                        <SelectTrigger><SelectValue placeholder="Select status" /></SelectTrigger>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select status" />
+                        </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Statuses</SelectItem>
                             <SelectItem value="Employed">Employed</SelectItem>
@@ -396,7 +475,9 @@ export function AlumniTable() {
                         </SelectContent>
                     </Select>
                     <Select value={filters.work_location} onValueChange={(value) => updateFilter('work_location', value)}>
-                        <SelectTrigger><SelectValue placeholder="Select work location" /></SelectTrigger>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select work location" />
+                        </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Locations</SelectItem>
                             <SelectItem value="local">Local</SelectItem>
@@ -404,7 +485,9 @@ export function AlumniTable() {
                         </SelectContent>
                     </Select>
                     <Select value={filters.sex} onValueChange={(value) => updateFilter('sex', value)}>
-                        <SelectTrigger><SelectValue placeholder="Select sex" /></SelectTrigger>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Select sex" />
+                        </SelectTrigger>
                         <SelectContent>
                             <SelectItem value="all">All Sex</SelectItem>
                             <SelectItem value="Male">Male</SelectItem>
@@ -458,7 +541,9 @@ export function AlumniTable() {
                             Array.from({ length: Math.min(filters.per_page, 5) }).map((_, index) => (
                                 <TableRow key={index}>
                                     {Array.from({ length: 9 }).map((__, cellIndex) => (
-                                        <TableCell key={cellIndex}><Skeleton className="h-5 w-full" /></TableCell>
+                                        <TableCell key={cellIndex}>
+                                            <Skeleton className="h-5 w-full" />
+                                        </TableCell>
                                     ))}
                                 </TableRow>
                             ))
@@ -466,7 +551,10 @@ export function AlumniTable() {
                             currentRows.map((record) => (
                                 <TableRow key={record.id}>
                                     <TableCell>
-                                        <Checkbox checked={Boolean(selectedAlumni[record.id])} onCheckedChange={(value) => toggleRow(record, Boolean(value))} />
+                                        <Checkbox
+                                            checked={Boolean(selectedAlumni[record.id])}
+                                            onCheckedChange={(value) => toggleRow(record, Boolean(value))}
+                                        />
                                     </TableCell>
                                     <TableCell>{record.student_number || 'N/A'}</TableCell>
                                     <TableCell>{record.email || 'N/A'}</TableCell>
@@ -484,7 +572,10 @@ export function AlumniTable() {
                                             </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
                                                 <DropdownMenuItem onClick={() => setViewingAlumni(record)}>View more details</DropdownMenuItem>
-                                                <DropdownMenuItem className="text-red-600 hover:text-red-500" onClick={() => openDeleteConfirm(record)}>
+                                                <DropdownMenuItem
+                                                    className="text-red-600 hover:text-red-500"
+                                                    onClick={() => openDeleteConfirm(record)}
+                                                >
                                                     Delete
                                                 </DropdownMenuItem>
                                             </DropdownMenuContent>
@@ -497,7 +588,9 @@ export function AlumniTable() {
                                 <TableCell colSpan={9} className="h-24 text-center">
                                     <Empty>
                                         <EmptyHeader>
-                                            <EmptyMedia variant="icon"><Users /></EmptyMedia>
+                                            <EmptyMedia variant="icon">
+                                                <Users />
+                                            </EmptyMedia>
                                             <EmptyTitle>No Alumni</EmptyTitle>
                                             <EmptyDescription>No data found</EmptyDescription>
                                         </EmptyHeader>
@@ -527,10 +620,14 @@ export function AlumniTable() {
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Confirm Delete</DialogTitle>
-                        <DialogDescription>Are you sure you want to delete {selectedCount} selected records? This action cannot be undone.</DialogDescription>
+                        <DialogDescription>
+                            Are you sure you want to delete {selectedCount} selected records? This action cannot be undone.
+                        </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
-                        <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)} disabled={bulkDeleteLoading}>Cancel</Button>
+                        <Button variant="ghost" onClick={() => setBulkDeleteOpen(false)} disabled={bulkDeleteLoading}>
+                            Cancel
+                        </Button>
                         <Button variant="destructive" onClick={handleBulkDelete} disabled={bulkDeleteLoading}>
                             {bulkDeleteLoading ? 'Deleting...' : 'Delete'}
                         </Button>
@@ -538,15 +635,20 @@ export function AlumniTable() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={showAddModal} onOpenChange={(open) => {
-                setShowAddModal(open);
-                if (!open) setEditingAlumni(null);
-            }}>
+            <Dialog
+                open={showAddModal}
+                onOpenChange={(open) => {
+                    setShowAddModal(open);
+                    if (!open) setEditingAlumni(null);
+                }}
+            >
                 <DialogContent className="max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>{editingAlumni ? 'Edit Alumni' : 'Add New Alumni'}</DialogTitle>
                         <DialogDescription>
-                            {editingAlumni ? 'Update the alumni information and submit to save changes.' : 'Fill out the form and submit to add a new record.'}
+                            {editingAlumni
+                                ? 'Update the alumni information and submit to save changes.'
+                                : 'Fill out the form and submit to add a new record.'}
                         </DialogDescription>
                     </DialogHeader>
                     <AlumniForm
@@ -582,9 +684,12 @@ export function AlumniTable() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={Boolean(viewingAlumni)} onOpenChange={(open) => {
-                if (!open) setViewingAlumni(null);
-            }}>
+            <Dialog
+                open={Boolean(viewingAlumni)}
+                onOpenChange={(open) => {
+                    if (!open) setViewingAlumni(null);
+                }}
+            >
                 <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>Alumni Details</DialogTitle>
@@ -615,8 +720,8 @@ export function AlumniTable() {
                                 ['Instruction Rating', String(viewingAlumni.instruction_rating ?? 'N/A')],
                             ].map(([label, value]) => (
                                 <div key={String(label)} className="space-y-1 rounded-md border p-3">
-                                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-                                    <p className="break-words text-sm">{value}</p>
+                                    <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
+                                    <p className="text-sm break-words">{value}</p>
                                 </div>
                             ))}
                         </div>
@@ -624,22 +729,35 @@ export function AlumniTable() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={deleteConfirmOpen} onOpenChange={(open) => {
-                setDeleteConfirmOpen(open);
-                if (!open) setPendingDeleteAlumni(null);
-            }}>
+            <Dialog
+                open={deleteConfirmOpen}
+                onOpenChange={(open) => {
+                    setDeleteConfirmOpen(open);
+                    if (!open) setPendingDeleteAlumni(null);
+                }}
+            >
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Confirm Delete</DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to delete <b>{pendingDeleteAlumni?.given_name} {pendingDeleteAlumni?.last_name}</b>? This action cannot be undone.
+                            Are you sure you want to delete{' '}
+                            <b>
+                                {pendingDeleteAlumni?.given_name} {pendingDeleteAlumni?.last_name}
+                            </b>
+                            ? This action cannot be undone.
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
-                        <Button variant="ghost" onClick={() => {
-                            setDeleteConfirmOpen(false);
-                            setPendingDeleteAlumni(null);
-                        }} disabled={deleteLoading === pendingDeleteAlumni?.id}>Cancel</Button>
+                        <Button
+                            variant="ghost"
+                            onClick={() => {
+                                setDeleteConfirmOpen(false);
+                                setPendingDeleteAlumni(null);
+                            }}
+                            disabled={deleteLoading === pendingDeleteAlumni?.id}
+                        >
+                            Cancel
+                        </Button>
                         <Button variant="destructive" onClick={confirmSingleDelete} disabled={deleteLoading === pendingDeleteAlumni?.id}>
                             {deleteLoading === pendingDeleteAlumni?.id ? 'Deleting...' : 'Delete'}
                         </Button>
@@ -647,25 +765,48 @@ export function AlumniTable() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={importOpen} onOpenChange={setImportOpen}>
-                <DialogContent>
+            <Dialog open={importOpen} onOpenChange={handleImportDialogOpenChange}>
+                <DialogContent
+                    closeButtonDisabled={isImportBusy}
+                    onEscapeKeyDown={(event) => {
+                        if (isImportBusy) {
+                            event.preventDefault();
+                        }
+                    }}
+                    onInteractOutside={(event) => {
+                        if (isImportBusy) {
+                            event.preventDefault();
+                        }
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle>Import Alumni</DialogTitle>
                         <DialogDescription>Upload an Excel/CSV file containing alumni data.</DialogDescription>
                     </DialogHeader>
-                    <Button className="w-fit px-0" variant="link" onClick={() => (window.location.href = route('alumni.template.download'))}>
+                    <Button
+                        className="w-fit px-0"
+                        variant="link"
+                        onClick={() => (window.location.href = route('alumni.template.download'))}
+                        disabled={isImportBusy}
+                    >
                         Download Excel Template
                     </Button>
                     <input
+                        key={importInputKey}
                         className="w-full rounded-md border border-input p-3 file:mr-4 file:rounded-md file:border-0 file:bg-muted file:px-4 file:py-2 file:text-sm file:font-semibold"
                         type="file"
                         accept=".xlsx,.xls,.csv"
-                        onChange={(event) => setImportFile(event.target.files?.[0] || null)}
+                        onChange={handleImportFileChange}
+                        disabled={isImportBusy}
                     />
+                    <ImportProgressPanel progress={importProgress} />
                     <DialogFooter>
-                        <Button variant="ghost" onClick={() => setImportOpen(false)} disabled={importLoading}>Cancel</Button>
-                        <Button onClick={handleImport} disabled={!importFile || importLoading}>
-                            <FileUp className="h-4 w-4" /> {importLoading ? 'Importing...' : 'Import'}
+                        <Button variant="ghost" onClick={() => handleImportDialogOpenChange(false)} disabled={isImportBusy}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleImport} disabled={!importFile || isImportBusy}>
+                            {isImportBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}{' '}
+                            {importProgress.phase === 'processing' ? 'Processing...' : isImportBusy ? 'Importing...' : 'Import'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

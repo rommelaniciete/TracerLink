@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { DataPagination } from '@/components/data-pagination';
+import { ImportProgressPanel, createIdleImportProgressState } from '@/components/import-progress-panel';
 import { SendEmailToSelected } from '@/components/SendEmailToProgram';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -24,9 +25,9 @@ import { useDebouncedValue } from '@/hooks/use-debounced-value';
 import { toast } from '@/lib/toast';
 import { StudentPageProps, StudentRecord } from '@/types/records';
 import { router, useForm, usePage } from '@inertiajs/react';
-import axios from 'axios';
-import { ArrowDownAZ, ArrowUpAZ, DownloadIcon, FileUp, Loader2, MoreHorizontal, PlusIcon, Search, Trash, Upload, Users } from 'lucide-react';
+import axios, { type AxiosProgressEvent } from 'axios';
 import { saveAs } from 'file-saver';
+import { ArrowDownAZ, ArrowUpAZ, DownloadIcon, FileUp, Loader2, MoreHorizontal, PlusIcon, Search, Trash, Upload, Users } from 'lucide-react';
 
 export default function StudentIndex() {
     const page = usePage<StudentPageProps>();
@@ -47,12 +48,14 @@ export default function StudentIndex() {
     const [excelFile, setExcelFile] = React.useState<File | null>(null);
     const [editStudent, setEditStudent] = React.useState<StudentRecord | null>(null);
     const [isFiltering, setIsFiltering] = React.useState(false);
-    const [isImporting, setIsImporting] = React.useState(false);
+    const [importProgress, setImportProgress] = React.useState(createIdleImportProgressState);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [isDeleting, setIsDeleting] = React.useState(false);
     const [isBulkDeleting, setIsBulkDeleting] = React.useState(false);
     const [isExporting, setIsExporting] = React.useState(false);
+    const [uploadInputKey, setUploadInputKey] = React.useState(0);
     const debouncedSearch = useDebouncedValue(search);
+    const isImportBusy = importProgress.phase !== 'idle';
 
     const { data, setData, reset } = useForm({
         id: '',
@@ -126,12 +129,7 @@ export default function StudentIndex() {
         const currentPerPage = String(props.filters.per_page ?? props.students.per_page ?? 10);
         const currentDirection = props.filters.direction ?? 'desc';
 
-        if (
-            debouncedSearch === currentSearch &&
-            yearFilter === currentYear &&
-            perPage === currentPerPage &&
-            sortDirection === currentDirection
-        ) {
+        if (debouncedSearch === currentSearch && yearFilter === currentYear && perPage === currentPerPage && sortDirection === currentDirection) {
             return;
         }
 
@@ -193,22 +191,84 @@ export default function StudentIndex() {
         }
     };
 
+    const resetImportProgress = React.useCallback(() => {
+        setImportProgress(createIdleImportProgressState());
+    }, []);
+
+    const resetUploadDialog = React.useCallback(
+        (options?: { clearFile?: boolean }) => {
+            resetImportProgress();
+
+            if (options?.clearFile) {
+                setExcelFile(null);
+                setUploadInputKey((current) => current + 1);
+            }
+        },
+        [resetImportProgress],
+    );
+
+    const handleUploadModalOpenChange = React.useCallback(
+        (nextOpen: boolean) => {
+            if (!nextOpen && isImportBusy) {
+                return;
+            }
+
+            setShowUploadModal(nextOpen);
+
+            if (!nextOpen) {
+                resetUploadDialog({ clearFile: true });
+            }
+        },
+        [isImportBusy, resetUploadDialog],
+    );
+
+    const handleExcelFileChange = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
+        const nextFile = event.target.files?.[0] ?? null;
+        setExcelFile(nextFile);
+        setImportProgress({
+            phase: 'idle',
+            uploadPercent: null,
+            uploadedBytes: null,
+            totalBytes: null,
+            selectedFileName: nextFile?.name ?? null,
+        });
+    }, []);
+
     const handleExcelUpload = async (event: React.FormEvent) => {
         event.preventDefault();
         if (!excelFile) return;
 
-        setIsImporting(true);
+        setImportProgress({
+            phase: 'uploading',
+            uploadPercent: 0,
+            uploadedBytes: 0,
+            totalBytes: excelFile.size || null,
+            selectedFileName: excelFile.name,
+        });
         const formData = new FormData();
         formData.append('file', excelFile);
 
         try {
             const response = await axios.post('/students/import', formData, {
                 headers: { 'Content-Type': 'multipart/form-data' },
+                onUploadProgress: (progressEvent: AxiosProgressEvent) => {
+                    const totalBytes = typeof progressEvent.total === 'number' && progressEvent.total > 0 ? progressEvent.total : null;
+                    const uploadedBytes = typeof progressEvent.loaded === 'number' ? progressEvent.loaded : null;
+                    const nextPercent = totalBytes && uploadedBytes !== null ? Math.min(100, Math.round((uploadedBytes * 100) / totalBytes)) : null;
+
+                    setImportProgress((current) => ({
+                        ...current,
+                        phase: nextPercent !== null && nextPercent >= 100 ? 'processing' : 'uploading',
+                        uploadPercent: nextPercent,
+                        uploadedBytes: uploadedBytes ?? current.uploadedBytes,
+                        totalBytes: totalBytes ?? current.totalBytes,
+                    }));
+                },
             });
 
             toast.success(response.data.message || 'Import successful!');
             setShowUploadModal(false);
-            setExcelFile(null);
+            resetUploadDialog({ clearFile: true });
             refreshCurrentPage();
         } catch (error) {
             if (axios.isAxiosError(error)) {
@@ -217,7 +277,7 @@ export default function StudentIndex() {
                 toast.error('Import failed.');
             }
         } finally {
-            setIsImporting(false);
+            resetImportProgress();
         }
     };
 
@@ -623,38 +683,59 @@ export default function StudentIndex() {
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[500px]">
+            <Dialog open={showUploadModal} onOpenChange={handleUploadModalOpenChange}>
+                <DialogContent
+                    className="max-h-[90vh] overflow-y-auto sm:max-w-[500px]"
+                    closeButtonDisabled={isImportBusy}
+                    onEscapeKeyDown={(event) => {
+                        if (isImportBusy) {
+                            event.preventDefault();
+                        }
+                    }}
+                    onInteractOutside={(event) => {
+                        if (isImportBusy) {
+                            event.preventDefault();
+                        }
+                    }}
+                >
                     <DialogHeader>
                         <DialogTitle className="text-xl">Import Students from Excel</DialogTitle>
-                        <DialogDescription>
-                            Please ensure your Excel file matches the required format before importing.
-                        </DialogDescription>
+                        <DialogDescription>Please ensure your Excel file matches the required format before importing.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleExcelUpload} className="space-y-4">
-                        <Button type="button" variant="link" className="px-0" onClick={handleDownloadTemplate}>
+                        <Button type="button" variant="link" className="px-0" onClick={handleDownloadTemplate} disabled={isImportBusy}>
                             Download Excel Template
                         </Button>
 
                         <div className="space-y-2">
                             <label className="text-sm font-medium">Excel File</label>
                             <input
+                                key={uploadInputKey}
                                 type="file"
                                 accept=".xlsx, .xls"
-                                onChange={(event) => setExcelFile(event.target.files?.[0] || null)}
+                                onChange={handleExcelFileChange}
                                 required
+                                disabled={isImportBusy}
                                 className="w-full rounded-md border border-input p-3 file:mr-4 file:rounded-md file:border-0 file:bg-muted file:px-4 file:py-2 file:text-sm file:font-semibold"
                             />
                             <p className="text-sm text-muted-foreground">Supported formats: .xlsx, .xls</p>
                         </div>
 
+                        <ImportProgressPanel progress={importProgress} />
+
                         <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-2">
-                            <Button type="button" variant="ghost" onClick={() => setShowUploadModal(false)} className="w-full sm:w-auto">
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                onClick={() => handleUploadModalOpenChange(false)}
+                                disabled={isImportBusy}
+                                className="w-full sm:w-auto"
+                            >
                                 Cancel
                             </Button>
-                            <Button type="submit" disabled={!excelFile || isImporting} className="w-full sm:w-auto">
-                                {isImporting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
-                                {isImporting ? 'Importing...' : 'Import'}
+                            <Button type="submit" disabled={!excelFile || isImportBusy} className="w-full sm:w-auto">
+                                {isImportBusy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
+                                {importProgress.phase === 'processing' ? 'Processing...' : isImportBusy ? 'Importing...' : 'Import'}
                             </Button>
                         </DialogFooter>
                     </form>
