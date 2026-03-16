@@ -4,14 +4,14 @@
 
 import { StarRating } from '@/components/StarRating';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { toast } from '@/lib/toast';
 import { useForm } from '@inertiajs/react';
 import axios from 'axios';
 import { AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { toast } from 'sonner';
 
 interface AlumniFormProps {
     mode?: 'create' | 'edit';
@@ -556,11 +556,7 @@ export const AlumniForm = memo(function AlumniForm({
                         <div className="space-y-4">
                             <h3 className="border-b pb-2 text-xl font-semibold text-foreground">Feedback</h3>
                             <FieldWrapper label="Rate Your Instruction (1-5 stars)" error={errors.instruction_rating}>
-                                <StarRating
-                                    value={data.instruction_rating || 0}
-                                    onChange={handleRatingChange}
-                                    disabled={isEditing}
-                                />
+                                <StarRating value={data.instruction_rating || 0} onChange={handleRatingChange} disabled={isEditing} />
                             </FieldWrapper>
                         </div>
 

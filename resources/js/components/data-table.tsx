@@ -4,10 +4,12 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { echo } from '@/echo';
+import { toast } from '@/lib/toast';
 import {
     ColumnDef,
     ColumnFiltersState,
@@ -20,18 +22,9 @@ import {
     useReactTable,
     VisibilityState,
 } from '@tanstack/react-table';
-import {
-    Empty,
-    EmptyContent,
-    EmptyDescription,
-    EmptyHeader,
-    EmptyMedia,
-    EmptyTitle,
-} from "@/components/ui/empty"
 import axios from 'axios';
 import { DownloadIcon, FileUp, FilterIcon, MoreVertical, PlusIcon, Trash2Icon, Upload, Users } from 'lucide-react';
 import * as React from 'react';
-import { toast } from 'sonner';
 import { AlumniForm } from './AlumniForm';
 
 export type Alumni = {
@@ -273,9 +266,7 @@ export function AlumniTable() {
             const errorMessage = axios.isAxiosError(error) ? error.response?.data?.message || error.response?.data?.error : 'Something went wrong.';
             const validationErrors = axios.isAxiosError(error) ? error.response?.data?.errors : null;
             if (validationErrors && typeof validationErrors === 'object') {
-                const validationMessage = Object.values(validationErrors)
-                    .flat()
-                    .join(' ');
+                const validationMessage = Object.values(validationErrors).flat().join(' ');
                 toast.error('Import failed', {
                     description: validationMessage || errorMessage,
                 });
@@ -404,7 +395,15 @@ export function AlumniTable() {
         { accessorKey: 'given_name', header: 'Given Name', cell: ({ getValue }) => getValue() || 'N/A' },
         { accessorKey: 'middle_initial', header: 'M.I.', cell: ({ getValue }) => getValue() || 'N/A' },
         { accessorKey: 'present_address', header: 'Present address.', cell: ({ getValue }) => getValue() || 'N/A' },
-        { accessorKey: 'sex', header: 'Sex', cell: ({ getValue }) => { const v = getValue() as string | undefined; return v ? <span className="capitalize">{v}</span> : 'N/A'; }, filterFn: (row, columnId, filterValue) => ((row.getValue(columnId) as string || '').toLowerCase() === filterValue.toLowerCase()), },
+        {
+            accessorKey: 'sex',
+            header: 'Sex',
+            cell: ({ getValue }) => {
+                const v = getValue() as string | undefined;
+                return v ? <span className="capitalize">{v}</span> : 'N/A';
+            },
+            filterFn: (row, columnId, filterValue) => ((row.getValue(columnId) as string) || '').toLowerCase() === filterValue.toLowerCase(),
+        },
         { accessorKey: 'graduation_year', header: 'Grad Year', cell: ({ getValue }) => getValue() || 'N/A' },
         { accessorKey: 'employment_status', header: 'Employment', filterFn: 'equals', cell: ({ getValue }) => getValue() || 'N/A' },
         { accessorKey: 'company_name', header: 'Company', filterFn: 'equals', cell: ({ getValue }) => getValue() || 'N/A' },
@@ -516,7 +515,6 @@ export function AlumniTable() {
 
     return (
         <div className="w-full">
-
             <div className="mb-6">
                 <h1 className="text-2xl font-semibold tracking-tight text-foreground">Alumni List</h1>
                 <p className="mt-1 text-sm text-muted-foreground">List of all registered alumni records.</p>
@@ -693,9 +691,9 @@ export function AlumniTable() {
                 {/* Action Buttons */}
                 <div className="flex w-full items-center justify-between">
                     <div className="flex items-center gap-3">
-
                         <div className="flex gap-2">
-                            <Button size="sm"
+                            <Button
+                                size="sm"
                                 variant="outline"
                                 onClick={() => setShowAddModal(true)}
                                 className="flex items-center gap-2 text-primary hover:bg-primary/20"
@@ -703,7 +701,6 @@ export function AlumniTable() {
                                 <PlusIcon className="h-4 w-4" />
                                 Add New
                             </Button>
-
                         </div>
 
                         {/* Bulk actions */}
@@ -899,8 +896,8 @@ export function AlumniTable() {
                                 ['Instruction Rating', viewingAlumni.instruction_rating?.toString() || 'N/A'],
                             ].map(([label, value]) => (
                                 <div key={String(label)} className="space-y-1 rounded-md border p-3">
-                                    <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{label}</p>
-                                    <p className="break-words text-sm">{value}</p>
+                                    <p className="text-xs font-medium tracking-wide text-muted-foreground uppercase">{label}</p>
+                                    <p className="text-sm break-words">{value}</p>
                                 </div>
                             ))}
                         </div>
@@ -938,11 +935,7 @@ export function AlumniTable() {
                         >
                             Cancel
                         </Button>
-                        <Button
-                            variant="destructive"
-                            onClick={confirmSingleDelete}
-                            disabled={deleteLoading === pendingDeleteAlumni?.id}
-                        >
+                        <Button variant="destructive" onClick={confirmSingleDelete} disabled={deleteLoading === pendingDeleteAlumni?.id}>
                             {deleteLoading === pendingDeleteAlumni?.id ? 'Deleting...' : 'Delete'}
                         </Button>
                     </DialogFooter>
@@ -995,8 +988,9 @@ export function AlumniTable() {
                                     {headerGroup.headers.map((header) => (
                                         <TableHead
                                             key={header.id}
-                                            className={`font-semibold ${header.column.id === 'select' ? 'w-10 px-2' : header.column.id === 'actions' ? 'w-16 px-2' : ''
-                                                }`}
+                                            className={`font-semibold ${
+                                                header.column.id === 'select' ? 'w-10 px-2' : header.column.id === 'actions' ? 'w-16 px-2' : ''
+                                            }`}
                                         >
                                             {header.isPlaceholder ? null : flexRender(header.column.columnDef.header, header.getContext())}
                                         </TableHead>
@@ -1016,8 +1010,8 @@ export function AlumniTable() {
                                                     cell.column.id === 'select'
                                                         ? 'w-10 px-2 align-top'
                                                         : cell.column.id === 'actions'
-                                                            ? 'w-16 px-2 align-top'
-                                                            : 'max-w-[220px] truncate align-top'
+                                                          ? 'w-16 px-2 align-top'
+                                                          : 'max-w-[220px] truncate align-top'
                                                 }
                                             >
                                                 {flexRender(cell.column.columnDef.cell, cell.getContext())}

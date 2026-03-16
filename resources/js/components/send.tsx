@@ -2,28 +2,52 @@
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { toast } from '@/lib/toast';
 import { PageProps } from '@/types';
 import { router, useForm, usePage } from '@inertiajs/react';
-import { ColumnDef, flexRender, getCoreRowModel, getFilteredRowModel, getPaginationRowModel, getSortedRowModel, SortingState, useReactTable, } from '@tanstack/react-table';
+import {
+    ColumnDef,
+    flexRender,
+    getCoreRowModel,
+    getFilteredRowModel,
+    getPaginationRowModel,
+    getSortedRowModel,
+    SortingState,
+    useReactTable,
+} from '@tanstack/react-table';
 import axios from 'axios';
-import { ChevronDown, ChevronsUpDown, ChevronUp, DownloadIcon, FileUp, Loader2, Menu, MoreHorizontal, PlusIcon, Search, Trash, Upload, Users, X, } from 'lucide-react';
-import * as React from 'react';
-import { toast } from 'sonner';
 import { saveAs } from 'file-saver';
+import {
+    ChevronDown,
+    ChevronsUpDown,
+    ChevronUp,
+    DownloadIcon,
+    FileUp,
+    Loader2,
+    Menu,
+    MoreHorizontal,
+    PlusIcon,
+    Search,
+    Trash,
+    Upload,
+    Users,
+    X,
+} from 'lucide-react';
+import * as React from 'react';
 import * as XLSX from 'xlsx';
 import { SendEmailToSelected } from './SendEmailToProgram';
-import {
-    Empty,
-    EmptyContent,
-    EmptyDescription,
-    EmptyHeader,
-    EmptyMedia,
-    EmptyTitle,
-} from "@/components/ui/empty"
 export type Student = {
     id: number;
     student_number: string;
@@ -385,7 +409,6 @@ export default function StudentIndex() {
 
     return (
         <div className="w-full p-6">
-
             {/* Mobile Menu Button */}
             <div className="mb-4 block md:hidden">
                 <Button variant="outline" size="icon" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} className="md:hidden">
@@ -446,16 +469,15 @@ export default function StudentIndex() {
                             variant="outline"
                             size="sm"
                             onClick={() => {
-                                reset()
-                                setEditId(null)
-                                setShowModal(true)
+                                reset();
+                                setEditId(null);
+                                setShowModal(true);
                             }}
                             className="w-full gap-2 md:w-auto"
                         >
                             <PlusIcon className="h-4 w-4" />
                             <span className="hidden sm:inline">Add New</span>
                         </Button>
-
                     </div>
 
                     {selectedCount > 0 && (
@@ -650,7 +672,7 @@ export default function StudentIndex() {
                                 className="w-full gap-2 font-medium md:w-auto"
                                 variant="link"
                             >
-                                <span className="text-blue-700 underline cursor-pointer">Download Excel Template</span>
+                                <span className="cursor-pointer text-blue-700 underline">Download Excel Template</span>
                             </Button>
                         </DialogFooter>
                     </DialogHeader>
@@ -672,7 +694,7 @@ export default function StudentIndex() {
                             </Button>
 
                             <Button type="submit" disabled={!excelFile || importLoading} className="w-full sm:w-auto">
-                                {importLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className=" h-4 w-4" />}
+                                {importLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <FileUp className="h-4 w-4" />}
                                 {importLoading ? 'Importing...' : 'Import'}
                             </Button>
                         </DialogFooter>
@@ -688,7 +710,7 @@ export default function StudentIndex() {
                         <DialogDescription>Are you sure you want to delete this student? This action cannot be undone.</DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-0">
-                        <div className='space-x-2'>
+                        <div className="space-x-2">
                             <Button
                                 type="button"
                                 variant="outline"
@@ -709,7 +731,6 @@ export default function StudentIndex() {
                                 )}
                             </Button>
                         </div>
-
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

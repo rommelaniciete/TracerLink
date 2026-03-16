@@ -12,10 +12,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
+import { toast } from '@/lib/toast';
 import { type BreadcrumbItem } from '@/types';
 import { Edit, Loader2, Plus, Trash2 } from 'lucide-react';
-import { toast } from 'sonner';
-
 
 type Program = {
     id: number;
@@ -39,15 +38,7 @@ export default function ProgramCrud({ programs }: Props) {
     const [editingProgram, setEditingProgram] = useState<Program | null>(null);
     const [processingDelete, setProcessingDelete] = useState<number | null>(null);
 
-    const {
-        data,
-        setData,
-        post,
-        put,
-        reset,
-        processing,
-        errors,
-    } = useForm({
+    const { data, setData, post, put, reset, processing, errors } = useForm({
         name: '',
     });
 
@@ -261,7 +252,7 @@ Note: You cannot delete a program if it has assigned alumni or records.`}
                                                 required
                                                 disabled={processing}
                                             />
-                                            <InputError  message={errors.name} />
+                                            <InputError message={errors.name} />
                                         </div>
 
                                         <DialogFooter className="gap-2">
