@@ -2,11 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ImportStudentsJob;
 use App\Models\Student;
+use App\Services\ImportProgressService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
-use PhpOffice\PhpSpreadsheet\IOFactory;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
@@ -74,69 +75,22 @@ class StudentController extends Controller
         return response()->json(['success' => true, 'message' => 'Student deleted successfully.']);
     }
 
-    public function import(Request $request)
+    public function import(Request $request, ImportProgressService $importProgress)
     {
         $request->validate([
-            'file' => 'required|file',
+            'file' => 'required|file|mimes:xlsx,xls,csv|max:2048',
         ]);
 
-        $file = $request->file('file');
-        $spreadsheet = IOFactory::load($file->getPathname());
-        $sheet = $spreadsheet->getActiveSheet();
-        $rows = $sheet->toArray();
+        $importId = $this->resolveImportId($request) ?? (string) str()->uuid();
+        $storedPath = $request->file('file')->store('imports/students');
 
-        array_shift($rows);
+        $importProgress->queue($importId);
+        ImportStudentsJob::dispatch($importId, $storedPath);
 
-        $inserted = 0;
-        $skipped = 0;
-
-        foreach ($rows as $row) {
-            $studentNumber = trim((string) ($row[0] ?? ''));
-            $studentName = trim((string) ($row[1] ?? ''));
-            $email = trim((string) ($row[2] ?? ''));
-            $year = trim((string) ($row[3] ?? ''));
-
-            if ($studentNumber === '' || $studentName === '' || $year === '' || ! is_numeric($year)) {
-                $skipped++;
-                continue;
-            }
-
-            $year = (int) $year;
-            $currentYear = (int) date('Y');
-
-            if ($year < 2022 || $year > $currentYear) {
-                $skipped++;
-                continue;
-            }
-
-            $hasDuplicateStudentNumber = Student::query()->where('student_number', $studentNumber)->exists();
-            $hasDuplicateEmail = $email !== '' && Student::query()->where('email', $email)->exists();
-
-            if ($hasDuplicateStudentNumber || $hasDuplicateEmail) {
-                $skipped++;
-                continue;
-            }
-
-            Student::create([
-                'student_number' => $studentNumber,
-                'student_name' => $studentName,
-                'email' => $email !== '' ? $email : null,
-                'year' => $year,
-            ]);
-
-            $inserted++;
-        }
-
-        if ($request->expectsJson() || $request->wantsJson()) {
-            return response()->json([
-                'message' => "{$inserted} students imported successfully!",
-                'imported' => $inserted,
-                'skipped' => $skipped,
-            ]);
-        }
-
-        return redirect()->route('students.index')
-            ->with('success', "{$inserted} students imported successfully!");
+        return response()->json([
+            'import_id' => $importId,
+            'message' => 'Upload complete. Import started.',
+        ], 202);
     }
 
     public function bulkDelete(Request $request)
@@ -240,5 +194,11 @@ class StudentController extends Controller
             'email' => $student->email,
             'year' => (int) $student->year,
         ];
+    }
+    private function resolveImportId(Request $request): ?string
+    {
+        $importId = trim((string) $request->input('import_id', ''));
+
+        return $importId !== '' ? $importId : null;
     }
 }

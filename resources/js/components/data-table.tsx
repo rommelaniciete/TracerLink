@@ -5,6 +5,7 @@ import * as React from 'react';
 import { AlumniForm } from '@/components/AlumniForm';
 import { DataPagination } from '@/components/data-pagination';
 import { ImportProgressPanel, createIdleImportProgressState } from '@/components/import-progress-panel';
+import { ImportResultPanel, createIdleImportResultState, extractImportIssues, extractImportMessage } from '@/components/import-result-panel';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -22,6 +23,27 @@ import { AlumniFilters, AlumniRecord, ProgramOption } from '@/types/records';
 import { usePage } from '@inertiajs/react';
 import axios, { type AxiosProgressEvent } from 'axios';
 import { DownloadIcon, FileUp, Loader2, MoreVertical, PlusIcon, Trash2Icon, Upload, Users } from 'lucide-react';
+
+function createImportRequestId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function toFiniteNumber(value: unknown) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+    }
+
+    if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    return null;
+}
 
 const DEFAULT_FILTERS: AlumniFilters = {
     search: '',
@@ -90,10 +112,13 @@ export function AlumniTable() {
     const [deleteLoading, setDeleteLoading] = React.useState<number | null>(null);
     const [bulkDeleteLoading, setBulkDeleteLoading] = React.useState(false);
     const [importProgress, setImportProgress] = React.useState(createIdleImportProgressState);
+    const [importResult, setImportResult] = React.useState(createIdleImportResultState);
     const [exportLoading, setExportLoading] = React.useState(false);
     const [importInputKey, setImportInputKey] = React.useState(0);
     const debouncedSearch = useDebouncedValue(filters.search);
     const isImportBusy = importProgress.phase !== 'idle';
+    const importPollerRef = React.useRef<number | null>(null);
+    const activeImportIdRef = React.useRef<string | null>(null);
 
     const selectedCount = React.useMemo(() => Object.keys(selectedAlumni).length, [selectedAlumni]);
 
@@ -160,9 +185,14 @@ export function AlumniTable() {
     }, [fetchPrograms]);
 
     React.useEffect(() => {
-        const nextFilters = {
-            ...filters,
+        const nextFilters: AlumniFilters = {
             search: debouncedSearch,
+            graduation_year: filters.graduation_year,
+            program_id: filters.program_id,
+            employment_status: filters.employment_status,
+            work_location: filters.work_location,
+            sex: filters.sex,
+            per_page: filters.per_page,
         };
 
         fetchAlumni(nextFilters, pageNumber);
@@ -245,6 +275,15 @@ export function AlumniTable() {
         setDeleteConfirmOpen(true);
     };
 
+    const stopImportProgressPolling = React.useCallback(() => {
+        if (importPollerRef.current !== null) {
+            window.clearInterval(importPollerRef.current);
+            importPollerRef.current = null;
+        }
+
+        activeImportIdRef.current = null;
+    }, []);
+
     const confirmSingleDelete = async () => {
         if (!pendingDeleteAlumni?.id) return;
 
@@ -288,14 +327,178 @@ export function AlumniTable() {
         }
     };
 
-    const resetImportDialog = React.useCallback((options?: { clearFile?: boolean }) => {
-        setImportProgress(createIdleImportProgressState());
-
-        if (options?.clearFile) {
-            setImportFile(null);
-            setImportInputKey((current) => current + 1);
-        }
+    const resetImportResult = React.useCallback(() => {
+        setImportResult(createIdleImportResultState());
     }, []);
+
+    const resetImportProgress = React.useCallback(() => {
+        stopImportProgressPolling();
+        setImportProgress(createIdleImportProgressState());
+    }, [stopImportProgressPolling]);
+
+    const resetImportDialog = React.useCallback(
+        (options?: { clearFile?: boolean; clearResult?: boolean }) => {
+            resetImportProgress();
+
+            if (options?.clearResult !== false) {
+                resetImportResult();
+            }
+
+            if (options?.clearFile) {
+                setImportFile(null);
+                setImportInputKey((current) => current + 1);
+            }
+        },
+        [resetImportProgress, resetImportResult],
+    );
+
+    const finalizeImport = React.useCallback(
+        (payload: unknown, status: string) => {
+            const imported = toFiniteNumber((payload as { imported?: unknown } | null)?.imported) ?? 0;
+            const skipped = toFiniteNumber((payload as { skipped?: unknown } | null)?.skipped) ?? 0;
+            const totalRows = toFiniteNumber((payload as { total_rows?: unknown } | null)?.total_rows) ?? imported + skipped;
+            const issues = extractImportIssues((payload as { errors?: unknown } | null)?.errors);
+            const message = extractImportMessage(payload, status === 'failed' ? 'Import failed.' : 'Import complete.');
+
+            if (status === 'failed') {
+                setImportResult({
+                    status: 'error',
+                    title: 'Import failed',
+                    summary: message,
+                    issues,
+                });
+                resetImportDialog({ clearFile: true, clearResult: false });
+                toast.error(message);
+                return;
+            }
+
+            const hasIssues = skipped > 0 || issues.length > 0;
+
+            if (imported > 0) {
+                toast.success(imported === totalRows ? message : `${imported} row(s) imported`);
+                fetchAlumni(
+                    {
+                        search: debouncedSearch,
+                        graduation_year: filters.graduation_year,
+                        program_id: filters.program_id,
+                        employment_status: filters.employment_status,
+                        work_location: filters.work_location,
+                        sex: filters.sex,
+                        per_page: filters.per_page,
+                    },
+                    1,
+                );
+            }
+
+            if (hasIssues) {
+                toast.warning(`${skipped || issues.length} row(s) need attention.`);
+                setImportResult({
+                    status: imported > 0 ? 'warning' : 'error',
+                    title: imported > 0 ? 'Import finished with issues' : 'Import could not complete',
+                    summary:
+                        imported > 0
+                            ? `${imported} of ${totalRows} alumni row(s) were imported. Review the problem rows below before trying again.`
+                            : 'No alumni rows were imported. Review the problem rows below and correct the file before trying again.',
+                    issues:
+                        issues.length > 0
+                            ? issues
+                            : [
+                                  {
+                                      row: null,
+                                      reason: 'Some rows were skipped, but the import did not provide row-level details.',
+                                  },
+                              ],
+                });
+                resetImportDialog({ clearFile: true, clearResult: false });
+                return;
+            }
+
+            setImportOpen(false);
+            resetImportDialog({ clearFile: true });
+        },
+        [
+            debouncedSearch,
+            fetchAlumni,
+            filters.employment_status,
+            filters.graduation_year,
+            filters.per_page,
+            filters.program_id,
+            filters.sex,
+            filters.work_location,
+            resetImportDialog,
+        ],
+    );
+
+    const pollImportProgress = React.useCallback(
+        async (importId: string) => {
+            try {
+                const response = await axios.get(`/imports/progress/${importId}`);
+                const nextProgress = toFiniteNumber(response.data?.progress);
+                const nextProcessedRows = toFiniteNumber(response.data?.processed_rows);
+                const nextTotalRows = toFiniteNumber(response.data?.total_rows);
+
+                setImportProgress((current) => {
+                    if (current.importId !== importId) {
+                        return current;
+                    }
+
+                    return {
+                        ...current,
+                        phase: 'processing',
+                        processingPercent: nextProgress ?? current.processingPercent,
+                        processedRows: nextProcessedRows ?? current.processedRows,
+                        totalRows: nextTotalRows ?? current.totalRows,
+                        processingMessage: typeof response.data?.message === 'string' ? response.data.message : current.processingMessage,
+                    };
+                });
+
+                if (response.data?.status === 'completed' || response.data?.status === 'failed') {
+                    stopImportProgressPolling();
+                    finalizeImport(response.data, response.data.status);
+                }
+            } catch (error) {
+                if (axios.isAxiosError(error) && error.response?.status === 404) {
+                    return;
+                }
+
+                stopImportProgressPolling();
+            }
+        },
+        [finalizeImport, stopImportProgressPolling],
+    );
+
+    const startImportProgressPolling = React.useCallback(
+        (importId: string) => {
+            if (activeImportIdRef.current === importId) {
+                return;
+            }
+
+            stopImportProgressPolling();
+            activeImportIdRef.current = importId;
+            void pollImportProgress(importId);
+            importPollerRef.current = window.setInterval(() => {
+                void pollImportProgress(importId);
+            }, 500);
+        },
+        [pollImportProgress, stopImportProgressPolling],
+    );
+
+    React.useEffect(() => {
+        if (importProgress.phase === 'processing' && importProgress.importId) {
+            startImportProgressPolling(importProgress.importId);
+            return;
+        }
+
+        if (importProgress.phase === 'idle') {
+            stopImportProgressPolling();
+        }
+    }, [importProgress.importId, importProgress.phase, startImportProgressPolling, stopImportProgressPolling]);
+
+    React.useEffect(() => {
+        return () => {
+            stopImportProgressPolling();
+        };
+    }, [stopImportProgressPolling]);
 
     const handleImportDialogOpenChange = React.useCallback(
         (nextOpen: boolean) => {
@@ -312,17 +515,26 @@ export function AlumniTable() {
         [isImportBusy, resetImportDialog],
     );
 
-    const handleImportFileChange = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-        const nextFile = event.target.files?.[0] ?? null;
-        setImportFile(nextFile);
-        setImportProgress({
-            phase: 'idle',
-            uploadPercent: null,
-            uploadedBytes: null,
-            totalBytes: null,
-            selectedFileName: nextFile?.name ?? null,
-        });
-    }, []);
+    const handleImportFileChange = React.useCallback(
+        (event: React.ChangeEvent<HTMLInputElement>) => {
+            const nextFile = event.target.files?.[0] ?? null;
+            setImportFile(nextFile);
+            resetImportResult();
+            setImportProgress({
+                phase: 'idle',
+                importId: null,
+                uploadPercent: null,
+                uploadedBytes: null,
+                totalBytes: null,
+                processingPercent: null,
+                processedRows: null,
+                totalRows: null,
+                processingMessage: null,
+                selectedFileName: nextFile?.name ?? null,
+            });
+        },
+        [resetImportResult],
+    );
 
     const handleImport = async () => {
         if (!importFile) {
@@ -330,15 +542,23 @@ export function AlumniTable() {
             return;
         }
 
+        resetImportResult();
+        const importId = createImportRequestId();
         setImportProgress({
             phase: 'uploading',
+            importId,
             uploadPercent: 0,
             uploadedBytes: 0,
             totalBytes: importFile.size || null,
+            processingPercent: null,
+            processedRows: null,
+            totalRows: null,
+            processingMessage: null,
             selectedFileName: importFile.name,
         });
         const formData = new FormData();
         formData.append('file', importFile);
+        formData.append('import_id', importId);
 
         try {
             const response = await axios.post('/alumni/import', formData, {
@@ -346,11 +566,14 @@ export function AlumniTable() {
                 onUploadProgress: (progressEvent: AxiosProgressEvent) => {
                     const totalBytes = typeof progressEvent.total === 'number' && progressEvent.total > 0 ? progressEvent.total : null;
                     const uploadedBytes = typeof progressEvent.loaded === 'number' ? progressEvent.loaded : null;
-                    const nextPercent = totalBytes && uploadedBytes !== null ? Math.min(100, Math.round((uploadedBytes * 100) / totalBytes)) : null;
+                    const nextPercent =
+                        totalBytes && uploadedBytes !== null && Number.isFinite(uploadedBytes)
+                            ? Math.min(100, Math.round((uploadedBytes * 100) / totalBytes))
+                            : null;
 
                     setImportProgress((current) => ({
                         ...current,
-                        phase: nextPercent !== null && nextPercent >= 100 ? 'processing' : 'uploading',
+                        phase: 'uploading',
                         uploadPercent: nextPercent,
                         uploadedBytes: uploadedBytes ?? current.uploadedBytes,
                         totalBytes: totalBytes ?? current.totalBytes,
@@ -358,28 +581,40 @@ export function AlumniTable() {
                 },
             });
 
-            const imported = Number(response.data?.imported ?? 0);
-            const skipped = Number(response.data?.skipped ?? 0);
-
-            if (imported > 0) {
-                toast.success(`${imported} row(s) imported`);
-                setImportOpen(false);
-                setImportFile(null);
-                setImportInputKey((current) => current + 1);
-                fetchAlumni({ ...filters, search: debouncedSearch }, 1);
-            }
-
-            if (skipped > 0) {
-                toast.warning(`${skipped} row(s) were skipped`);
-            }
+            setImportProgress((current) => ({
+                ...current,
+                phase: 'processing',
+                importId: typeof response.data?.import_id === 'string' ? response.data.import_id : importId,
+                uploadPercent: 100,
+                processingPercent: 0,
+                processedRows: 0,
+                totalRows: current.totalRows,
+                processingMessage: typeof response.data?.message === 'string' ? response.data.message : 'Upload complete. Waiting to start...',
+            }));
         } catch (error) {
             if (axios.isAxiosError(error)) {
-                toast.error(error.response?.data?.message || 'Import failed.');
+                const responseData = error.response?.data;
+                const message = extractImportMessage(responseData, 'Import failed.');
+                const issues = extractImportIssues(responseData?.errors);
+
+                setImportResult({
+                    status: 'error',
+                    title: 'Import failed',
+                    summary: message,
+                    issues,
+                });
+                resetImportDialog({ clearFile: true, clearResult: false });
+                toast.error(message);
             } else {
+                setImportResult({
+                    status: 'error',
+                    title: 'Import failed',
+                    summary: 'Something went wrong while importing the file.',
+                    issues: [],
+                });
+                resetImportDialog({ clearFile: true, clearResult: false });
                 toast.error('Import failed.');
             }
-        } finally {
-            setImportProgress(createIdleImportProgressState());
         }
     };
 
@@ -422,7 +657,7 @@ export function AlumniTable() {
 
     return (
         <div className="space-y-6">
-            <div className="flex flex-col gap-4 rounded-xl border bg-card p-4">
+            <div className="flex flex-col gap-4 rounded-xl border p-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                     <div>
                         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Alumni List</h1>
@@ -793,13 +1028,14 @@ export function AlumniTable() {
                     </Button>
                     <input
                         key={importInputKey}
-                        className="w-full rounded-md border border-input p-3 file:mr-4 file:rounded-md file:border-0 file:bg-muted file:px-4 file:py-2 file:text-sm file:font-semibold"
+                        className="w-full rounded-md border border-input p-3 file:mr-4 file:rounded-md file:border-0 file:px-4 file:py-2 file:text-sm file:font-semibold"
                         type="file"
                         accept=".xlsx,.xls,.csv"
                         onChange={handleImportFileChange}
                         disabled={isImportBusy}
                     />
                     <ImportProgressPanel progress={importProgress} />
+                    <ImportResultPanel result={importResult} />
                     <DialogFooter>
                         <Button variant="ghost" onClick={() => handleImportDialogOpenChange(false)} disabled={isImportBusy}>
                             Cancel

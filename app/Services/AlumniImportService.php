@@ -5,12 +5,17 @@ namespace App\Services;
 use App\Models\Alumni;
 use App\Models\Program;
 use Illuminate\Support\Arr;
-use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
+use Maatwebsite\Excel\Facades\Excel;
 
 class AlumniImportService
 {
+    public function __construct(
+        private readonly ImportProgressService $importProgress,
+    ) {
+    }
+
     protected const HEADERS = [
         'Student Number',
         'Email',
@@ -82,22 +87,32 @@ class AlumniImportService
     /**
      * Import alumni from uploaded Excel file
      */
-    public function import($file): array
+    public function import($file, ?string $importId = null): array
     {
         try {
             $data = Excel::toArray([], $file);
 
             if (empty($data[0])) {
-                throw new \Exception('File is empty');
+                throw new InvalidArgumentException('The uploaded file is empty.');
             }
 
             $rows = $data[0];
             $headerIndexes = null;
 
+            $totalRows = $this->countImportableRows($rows);
+
+            if ($totalRows === 0) {
+                throw new InvalidArgumentException('No alumni rows were found in the uploaded file.');
+            }
+
+            if ($importId !== null) {
+                $this->importProgress->startProcessing($importId, $totalRows);
+            }
+
             $imported = 0;
             $skipped = 0;
             $errors = [];
-            $totalRows = 0;
+            $processedRows = 0;
 
             foreach ($rows as $index => $row) {
                 try {
@@ -110,18 +125,23 @@ class AlumniImportService
                         continue;
                     }
 
-                    $totalRows++;
                     $prepared = $this->prepareRow($row, $headerIndexes);
                     $this->importRow($prepared);
                     $imported++;
+                    $processedRows++;
+                    $this->advanceImportProgress($importId, $processedRows, $totalRows);
                 } catch (InvalidArgumentException $e) {
                     $skipped++;
+                    $processedRows++;
+                    $this->advanceImportProgress($importId, $processedRows, $totalRows);
                     $errors[] = [
                         'row' => $index + 1,
                         'reason' => $e->getMessage(),
                     ];
                 } catch (\Exception $e) {
                     $skipped++;
+                    $processedRows++;
+                    $this->advanceImportProgress($importId, $processedRows, $totalRows);
                     Log::error("Import error at row " . ($index + 1) . ": " . $e->getMessage());
                     $errors[] = [
                         'row' => $index + 1,
@@ -130,14 +150,28 @@ class AlumniImportService
                 }
             }
 
+            $message = "{$imported} of {$totalRows} alumni imported successfully";
+
+            if ($importId !== null) {
+                $this->importProgress->complete($importId, $message, $totalRows, [
+                    'imported' => $imported,
+                    'skipped' => $skipped,
+                    'errors' => $errors,
+                ]);
+            }
+
             return [
                 'imported' => $imported,
                 'skipped' => $skipped,
                 'total_rows' => $totalRows,
                 'errors' => $errors,
-                'message' => "{$imported} of {$totalRows} alumni imported successfully",
+                'message' => $message,
             ];
         } catch (\Exception $e) {
+            if ($importId !== null) {
+                $this->importProgress->fail($importId, $e->getMessage());
+            }
+
             Log::error('Import failed: ' . $e->getMessage());
             throw $e;
         }
@@ -438,5 +472,35 @@ class AlumniImportService
     public static function getHeaders(): array
     {
         return self::HEADERS;
+    }
+
+    private function countImportableRows(array $rows): int
+    {
+        $headerIndexes = null;
+        $totalRows = 0;
+
+        foreach ($rows as $row) {
+            if ($headerIndexes === null && is_array($row) && $this->isHeaderRow($row)) {
+                $headerIndexes = $this->buildHeaderIndexes($row);
+                continue;
+            }
+
+            if ($this->isSkippableRow($row)) {
+                continue;
+            }
+
+            $totalRows++;
+        }
+
+        return $totalRows;
+    }
+
+    private function advanceImportProgress(?string $importId, int $processedRows, int $totalRows): void
+    {
+        if ($importId === null) {
+            return;
+        }
+
+        $this->importProgress->advance($importId, $processedRows, $totalRows);
     }
 }

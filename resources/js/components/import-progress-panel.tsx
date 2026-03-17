@@ -6,9 +6,14 @@ export type ImportProgressPhase = 'idle' | 'uploading' | 'processing';
 
 export type ImportProgressState = {
     phase: ImportProgressPhase;
+    importId: string | null;
     uploadPercent: number | null;
     uploadedBytes: number | null;
     totalBytes: number | null;
+    processingPercent: number | null;
+    processedRows: number | null;
+    totalRows: number | null;
+    processingMessage: string | null;
     selectedFileName: string | null;
 };
 
@@ -19,15 +24,36 @@ type ImportProgressPanelProps = {
 export function createIdleImportProgressState(): ImportProgressState {
     return {
         phase: 'idle',
+        importId: null,
         uploadPercent: null,
         uploadedBytes: null,
         totalBytes: null,
+        processingPercent: null,
+        processedRows: null,
+        totalRows: null,
+        processingMessage: null,
         selectedFileName: null,
     };
 }
 
+function clampFiniteNumber(value: number | null) {
+    if (value === null || !Number.isFinite(value)) {
+        return null;
+    }
+
+    return Math.max(0, Math.min(value, 100));
+}
+
+function finiteWholeNumber(value: number | null) {
+    if (value === null || !Number.isFinite(value)) {
+        return null;
+    }
+
+    return Math.max(0, Math.round(value));
+}
+
 function formatBytes(bytes: number | null) {
-    if (!bytes || bytes <= 0) {
+    if (!bytes || !Number.isFinite(bytes) || bytes <= 0) {
         return null;
     }
 
@@ -43,7 +69,10 @@ export function ImportProgressPanel({ progress }: ImportProgressPanelProps) {
         return null;
     }
 
-    const progressValue = progress.uploadPercent === null ? null : Math.max(0, Math.min(progress.uploadPercent, 100));
+    const uploadProgressValue = clampFiniteNumber(progress.uploadPercent);
+    const processingProgressValue = clampFiniteNumber(progress.processingPercent);
+    const processedRows = finiteWholeNumber(progress.processedRows);
+    const totalRows = finiteWholeNumber(progress.totalRows);
     const fileLabel = progress.selectedFileName ?? 'your file';
     const uploadedSize = formatBytes(progress.uploadedBytes);
     const totalSize = formatBytes(progress.totalBytes);
@@ -54,9 +83,22 @@ export function ImportProgressPanel({ progress }: ImportProgressPanelProps) {
                 : 'Upload complete'
             : uploadedSize && totalSize
               ? `${uploadedSize} of ${totalSize} uploaded`
-              : progressValue !== null
-                ? `${progressValue}% uploaded`
+              : uploadProgressValue !== null
+                ? `${uploadProgressValue}% uploaded`
                 : 'Uploading to the server';
+    const processingStatusLabel =
+        progress.phase === 'processing'
+            ? processedRows !== null && totalRows !== null && totalRows > 0
+                ? `${processedRows} of ${totalRows} rows processed`
+                : (progress.processingMessage ?? 'Preparing processing progress...')
+            : 'Starts after the upload reaches the server';
+    const progressValue = progress.phase === 'processing' ? processingProgressValue : uploadProgressValue;
+    const activeStatusLabel =
+        progress.phase === 'processing'
+            ? processingProgressValue !== null && totalRows !== null && totalRows > 0
+                ? `${processingProgressValue}% complete`
+                : (progress.processingMessage ?? 'Preparing progress...')
+            : uploadStatusLabel;
 
     return (
         <div className="space-y-4 rounded-lg border bg-muted/30 p-4">
@@ -72,7 +114,7 @@ export function ImportProgressPanel({ progress }: ImportProgressPanelProps) {
                     <p className="text-xs text-muted-foreground">
                         {progress.phase === 'uploading'
                             ? 'This bar reflects file transfer only. Row processing begins after the upload finishes.'
-                            : 'The file is already on the server. Rows are being processed now, so there is no exact percentage yet.'}
+                            : 'This bar now reflects how many rows the server has already finished processing.'}
                     </p>
                 </div>
             </div>
@@ -89,25 +131,12 @@ export function ImportProgressPanel({ progress }: ImportProgressPanelProps) {
                     )}
                 >
                     <p className="text-xs font-medium tracking-[0.18em] text-muted-foreground uppercase">Processing</p>
-                    <p className="mt-1 text-sm font-medium text-foreground">
-                        {progress.phase === 'processing' ? 'Rows are being imported on the server' : 'Starts after the upload reaches the server'}
-                    </p>
+                    <p className="mt-1 text-sm font-medium text-foreground">{processingStatusLabel}</p>
                 </div>
             </div>
 
-            {progress.phase === 'uploading' ? (
-                progressValue !== null ? (
-                    <Progress value={progressValue} className="h-2.5" />
-                ) : (
-                    <div className="relative h-2.5 overflow-hidden rounded-full bg-secondary">
-                        <div
-                            className={cn(
-                                'absolute inset-y-0 left-0 w-1/3 rounded-full bg-primary/85',
-                                'animate-[processing-bar_1.25s_ease-in-out_infinite]',
-                            )}
-                        />
-                    </div>
-                )
+            {progressValue !== null ? (
+                <Progress value={progressValue} className="h-2.5" />
             ) : (
                 <div className="relative h-2.5 overflow-hidden rounded-full bg-secondary">
                     <div
@@ -121,7 +150,7 @@ export function ImportProgressPanel({ progress }: ImportProgressPanelProps) {
 
             <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span className="truncate">{fileLabel}</span>
-                <span>{progress.phase === 'processing' ? 'Waiting for the import result from the server' : uploadStatusLabel}</span>
+                <span>{activeStatusLabel}</span>
             </div>
         </div>
     );

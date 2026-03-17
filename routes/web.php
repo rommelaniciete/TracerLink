@@ -25,6 +25,7 @@ use App\Http\Controllers\{
     GenderChartController,
     EmployabilityController,
     TestController,
+    ImportProgressController,
 };
 use App\Exports\StudentTemplateExport;
 use Maatwebsite\Excel\Facades\Excel;
@@ -136,6 +137,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // ✅ Import Alumni (main + alias para sa React)
     Route::post('/alumni/import', [AlumniImportController::class, 'import'])->name('alumni.import');
     Route::post('/import-alumni', [AlumniImportController::class, 'import'])->name('alumni.import.alias');
+    Route::get('/imports/progress/{importId}', [ImportProgressController::class, 'show'])->name('imports.progress');
 });
 
 // 📍 Job Posts

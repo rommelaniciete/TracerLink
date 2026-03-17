@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { DataPagination } from '@/components/data-pagination';
 import { ImportProgressPanel, createIdleImportProgressState } from '@/components/import-progress-panel';
+import { ImportResultPanel, createIdleImportResultState, extractImportIssues, extractImportMessage } from '@/components/import-result-panel';
 import { SendEmailToSelected } from '@/components/SendEmailToProgram';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -29,6 +30,27 @@ import axios, { type AxiosProgressEvent } from 'axios';
 import { saveAs } from 'file-saver';
 import { ArrowDownAZ, ArrowUpAZ, DownloadIcon, FileUp, Loader2, MoreHorizontal, PlusIcon, Search, Trash, Upload, Users } from 'lucide-react';
 
+function createImportRequestId() {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+    }
+
+    return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
+function toFiniteNumber(value: unknown) {
+    if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+    }
+
+    if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = Number(value);
+        return Number.isFinite(parsed) ? parsed : null;
+    }
+
+    return null;
+}
+
 export default function StudentIndex() {
     const page = usePage<StudentPageProps>();
     const { props, url } = page;
@@ -49,6 +71,7 @@ export default function StudentIndex() {
     const [editStudent, setEditStudent] = React.useState<StudentRecord | null>(null);
     const [isFiltering, setIsFiltering] = React.useState(false);
     const [importProgress, setImportProgress] = React.useState(createIdleImportProgressState);
+    const [importResult, setImportResult] = React.useState(createIdleImportResultState);
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [isDeleting, setIsDeleting] = React.useState(false);
     const [isBulkDeleting, setIsBulkDeleting] = React.useState(false);
@@ -56,6 +79,8 @@ export default function StudentIndex() {
     const [uploadInputKey, setUploadInputKey] = React.useState(0);
     const debouncedSearch = useDebouncedValue(search);
     const isImportBusy = importProgress.phase !== 'idle';
+    const importPollerRef = React.useRef<number | null>(null);
+    const activeImportIdRef = React.useRef<string | null>(null);
 
     const { data, setData, reset } = useForm({
         id: '',
@@ -160,6 +185,86 @@ export default function StudentIndex() {
         navigate({});
     }, [navigate]);
 
+    const stopImportProgressPolling = React.useCallback(() => {
+        if (importPollerRef.current !== null) {
+            window.clearInterval(importPollerRef.current);
+            importPollerRef.current = null;
+        }
+
+        activeImportIdRef.current = null;
+    }, []);
+
+    const pollImportProgress = React.useCallback(
+        async (importId: string) => {
+            try {
+                const response = await axios.get(`/imports/progress/${importId}`);
+                const nextProgress = toFiniteNumber(response.data?.progress);
+                const nextProcessedRows = toFiniteNumber(response.data?.processed_rows);
+                const nextTotalRows = toFiniteNumber(response.data?.total_rows);
+
+                setImportProgress((current) => {
+                    if (current.importId !== importId) {
+                        return current;
+                    }
+
+                    return {
+                        ...current,
+                        phase: 'processing',
+                        processingPercent: nextProgress ?? current.processingPercent,
+                        processedRows: nextProcessedRows ?? current.processedRows,
+                        totalRows: nextTotalRows ?? current.totalRows,
+                        processingMessage: typeof response.data?.message === 'string' ? response.data.message : current.processingMessage,
+                    };
+                });
+
+                if (response.data?.status === 'completed' || response.data?.status === 'failed') {
+                    stopImportProgressPolling();
+                    finalizeImport(response.data, response.data.status);
+                }
+            } catch (error) {
+                if (axios.isAxiosError(error) && error.response?.status === 404) {
+                    return;
+                }
+
+                stopImportProgressPolling();
+            }
+        },
+        [finalizeImport, stopImportProgressPolling],
+    );
+
+    const startImportProgressPolling = React.useCallback(
+        (importId: string) => {
+            if (activeImportIdRef.current === importId) {
+                return;
+            }
+
+            stopImportProgressPolling();
+            activeImportIdRef.current = importId;
+            void pollImportProgress(importId);
+            importPollerRef.current = window.setInterval(() => {
+                void pollImportProgress(importId);
+            }, 500);
+        },
+        [pollImportProgress, stopImportProgressPolling],
+    );
+
+    React.useEffect(() => {
+        if (importProgress.phase === 'processing' && importProgress.importId) {
+            startImportProgressPolling(importProgress.importId);
+            return;
+        }
+
+        if (importProgress.phase === 'idle') {
+            stopImportProgressPolling();
+        }
+    }, [importProgress.importId, importProgress.phase, startImportProgressPolling, stopImportProgressPolling]);
+
+    React.useEffect(() => {
+        return () => {
+            stopImportProgressPolling();
+        };
+    }, [stopImportProgressPolling]);
+
     const openCreateModal = () => {
         setEditStudent(null);
         reset();
@@ -192,20 +297,82 @@ export default function StudentIndex() {
     };
 
     const resetImportProgress = React.useCallback(() => {
+        stopImportProgressPolling();
         setImportProgress(createIdleImportProgressState());
+    }, [stopImportProgressPolling]);
+
+    const resetImportResult = React.useCallback(() => {
+        setImportResult(createIdleImportResultState());
     }, []);
 
     const resetUploadDialog = React.useCallback(
-        (options?: { clearFile?: boolean }) => {
+        (options?: { clearFile?: boolean; clearResult?: boolean }) => {
             resetImportProgress();
+
+            if (options?.clearResult !== false) {
+                resetImportResult();
+            }
 
             if (options?.clearFile) {
                 setExcelFile(null);
                 setUploadInputKey((current) => current + 1);
             }
         },
-        [resetImportProgress],
+        [resetImportProgress, resetImportResult],
     );
+
+    function finalizeImport(payload: unknown, status: string) {
+        const imported = toFiniteNumber((payload as { imported?: unknown } | null)?.imported) ?? 0;
+        const skipped = toFiniteNumber((payload as { skipped?: unknown } | null)?.skipped) ?? 0;
+        const totalRows = toFiniteNumber((payload as { total_rows?: unknown } | null)?.total_rows) ?? imported + skipped;
+        const issues = extractImportIssues((payload as { errors?: unknown } | null)?.errors);
+        const message = extractImportMessage(payload, status === 'failed' ? 'Import failed.' : 'Import complete.');
+
+        if (status === 'failed') {
+            setImportResult({
+                status: 'error',
+                title: 'Import failed',
+                summary: message,
+                issues,
+            });
+            resetUploadDialog({ clearFile: true, clearResult: false });
+            toast.error(message);
+            return;
+        }
+
+        const hasIssues = skipped > 0 || issues.length > 0;
+
+        if (imported > 0) {
+            toast.success(imported === totalRows ? message : `${imported} row(s) imported successfully.`);
+            refreshCurrentPage();
+        }
+
+        if (hasIssues) {
+            toast.warning(`${skipped || issues.length} row(s) need attention.`);
+            setImportResult({
+                status: imported > 0 ? 'warning' : 'error',
+                title: imported > 0 ? 'Import finished with issues' : 'Import could not complete',
+                summary:
+                    imported > 0
+                        ? `${imported} of ${totalRows} student row(s) were imported. Review the problem rows below before trying again.`
+                        : 'No student rows were imported. Review the problem rows below and correct the file before trying again.',
+                issues:
+                    issues.length > 0
+                        ? issues
+                        : [
+                              {
+                                  row: null,
+                                  reason: 'Some rows were skipped, but the import did not provide row-level details.',
+                              },
+                          ],
+            });
+            resetUploadDialog({ clearFile: true, clearResult: false });
+            return;
+        }
+
+        setShowUploadModal(false);
+        resetUploadDialog({ clearFile: true });
+    }
 
     const handleUploadModalOpenChange = React.useCallback(
         (nextOpen: boolean) => {
@@ -222,31 +389,48 @@ export default function StudentIndex() {
         [isImportBusy, resetUploadDialog],
     );
 
-    const handleExcelFileChange = React.useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
-        const nextFile = event.target.files?.[0] ?? null;
-        setExcelFile(nextFile);
-        setImportProgress({
-            phase: 'idle',
-            uploadPercent: null,
-            uploadedBytes: null,
-            totalBytes: null,
-            selectedFileName: nextFile?.name ?? null,
-        });
-    }, []);
+    const handleExcelFileChange = React.useCallback(
+        (event: React.ChangeEvent<HTMLInputElement>) => {
+            const nextFile = event.target.files?.[0] ?? null;
+            setExcelFile(nextFile);
+            resetImportResult();
+            setImportProgress({
+                phase: 'idle',
+                importId: null,
+                uploadPercent: null,
+                uploadedBytes: null,
+                totalBytes: null,
+                processingPercent: null,
+                processedRows: null,
+                totalRows: null,
+                processingMessage: null,
+                selectedFileName: nextFile?.name ?? null,
+            });
+        },
+        [resetImportResult],
+    );
 
     const handleExcelUpload = async (event: React.FormEvent) => {
         event.preventDefault();
         if (!excelFile) return;
 
+        resetImportResult();
+        const importId = createImportRequestId();
         setImportProgress({
             phase: 'uploading',
+            importId,
             uploadPercent: 0,
             uploadedBytes: 0,
             totalBytes: excelFile.size || null,
+            processingPercent: null,
+            processedRows: null,
+            totalRows: null,
+            processingMessage: null,
             selectedFileName: excelFile.name,
         });
         const formData = new FormData();
         formData.append('file', excelFile);
+        formData.append('import_id', importId);
 
         try {
             const response = await axios.post('/students/import', formData, {
@@ -254,11 +438,14 @@ export default function StudentIndex() {
                 onUploadProgress: (progressEvent: AxiosProgressEvent) => {
                     const totalBytes = typeof progressEvent.total === 'number' && progressEvent.total > 0 ? progressEvent.total : null;
                     const uploadedBytes = typeof progressEvent.loaded === 'number' ? progressEvent.loaded : null;
-                    const nextPercent = totalBytes && uploadedBytes !== null ? Math.min(100, Math.round((uploadedBytes * 100) / totalBytes)) : null;
+                    const nextPercent =
+                        totalBytes && uploadedBytes !== null && Number.isFinite(uploadedBytes)
+                            ? Math.min(100, Math.round((uploadedBytes * 100) / totalBytes))
+                            : null;
 
                     setImportProgress((current) => ({
                         ...current,
-                        phase: nextPercent !== null && nextPercent >= 100 ? 'processing' : 'uploading',
+                        phase: 'uploading',
                         uploadPercent: nextPercent,
                         uploadedBytes: uploadedBytes ?? current.uploadedBytes,
                         totalBytes: totalBytes ?? current.totalBytes,
@@ -266,18 +453,40 @@ export default function StudentIndex() {
                 },
             });
 
-            toast.success(response.data.message || 'Import successful!');
-            setShowUploadModal(false);
-            resetUploadDialog({ clearFile: true });
-            refreshCurrentPage();
+            setImportProgress((current) => ({
+                ...current,
+                phase: 'processing',
+                importId: typeof response.data?.import_id === 'string' ? response.data.import_id : importId,
+                uploadPercent: 100,
+                processingPercent: 0,
+                processedRows: 0,
+                totalRows: current.totalRows,
+                processingMessage: typeof response.data?.message === 'string' ? response.data.message : 'Upload complete. Waiting to start...',
+            }));
         } catch (error) {
             if (axios.isAxiosError(error)) {
-                toast.error(error.response?.data?.message || 'Import failed.');
+                const responseData = error.response?.data;
+                const message = extractImportMessage(responseData, 'Import failed.');
+                const issues = extractImportIssues(responseData?.errors);
+
+                setImportResult({
+                    status: 'error',
+                    title: 'Import failed',
+                    summary: message,
+                    issues,
+                });
+                resetUploadDialog({ clearFile: true, clearResult: false });
+                toast.error(message);
             } else {
+                setImportResult({
+                    status: 'error',
+                    title: 'Import failed',
+                    summary: 'Something went wrong while importing the file.',
+                    issues: [],
+                });
+                resetUploadDialog({ clearFile: true, clearResult: false });
                 toast.error('Import failed.');
             }
-        } finally {
-            resetImportProgress();
         }
     };
 
@@ -722,6 +931,7 @@ export default function StudentIndex() {
                         </div>
 
                         <ImportProgressPanel progress={importProgress} />
+                        <ImportResultPanel result={importResult} />
 
                         <DialogFooter className="flex flex-col gap-2 sm:flex-row sm:gap-2">
                             <Button
